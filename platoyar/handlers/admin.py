@@ -465,28 +465,30 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
                 else:
                     media.append(InputMediaPhoto(media=file_id, caption=cap, parse_mode=pm))
             sent = await context.bot.send_media_group(chat_id=chat_id, media=media)
-            await context.bot.send_message(
+            btn_msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text="👆 برای مشاهده‌ی کامل و خرید این اکانت، دکمه‌ی زیر را بزنید:",
                 reply_markup=keyboard,
                 reply_to_message_id=sent[0].message_id,
             )
-            return sent[0].message_id
+            # (post_id, button_id) — دکمه روی پیام جداست
+            return sent[0].message_id, btn_msg.message_id
         elif len(raw) == 1:
             kind, file_id = raw[0]
             if kind == 'video':
                 sent = await context.bot.send_video(chat_id=chat_id, video=file_id, caption=post_text, reply_markup=keyboard, parse_mode="HTML")
             else:
                 sent = await context.bot.send_photo(chat_id=chat_id, photo=file_id, caption=post_text, reply_markup=keyboard, parse_mode="HTML")
-            return sent.message_id
+            # دکمه روی خود پیام است؛ پیام دکمه‌ی جدا نداریم
+            return sent.message_id, None
         else:
             sent = await context.bot.send_message(chat_id=chat_id, text=post_text, reply_markup=keyboard, parse_mode="HTML")
-            return sent.message_id
+            return sent.message_id, None
 
     try:
-        ad['game_channel_post_id'] = await _post_to_channel(GAME_CHANNEL_ID)
+        ad['game_channel_post_id'], ad['game_channel_button_id'] = await _post_to_channel(GAME_CHANNEL_ID)
         if publish_method == 'both':
-            ad['channel_post_id'] = await _post_to_channel(MAIN_CHANNEL_ID)
+            ad['channel_post_id'], ad['channel_button_id'] = await _post_to_channel(MAIN_CHANNEL_ID)
         
         all_agahi = load_agahi()
         if str(ad['user_id']) not in all_agahi:

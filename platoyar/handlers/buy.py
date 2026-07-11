@@ -299,9 +299,11 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
     seller_id = None
     channel_post_id = None
     game_channel_post_id = None
+    channel_button_id = None
+    game_channel_button_id = None
     ad_price = None
     publish_date = None
-    
+
     for uid, ads in all_agahi.items():
         for a in ads:
             if a['id'] == ad_id:
@@ -309,6 +311,8 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 seller_id = int(uid)
                 channel_post_id = a.get('channel_post_id')
                 game_channel_post_id = a.get('game_channel_post_id')
+                channel_button_id = a.get('channel_button_id')
+                game_channel_button_id = a.get('game_channel_button_id')
                 ad_price = ad.get('price')
                 if ad.get('discount_history'):
                     for disc in reversed(ad['discount_history']):
@@ -403,6 +407,12 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     parse_mode="HTML",
                     reply_markup=None
                 )
+            # حذف پیام دکمه‌ی «اطلاعات بیشتر و خرید» چون اکانت فروخته شد
+            if game_channel_button_id:
+                try:
+                    await context.bot.delete_message(chat_id=GAME_CHANNEL_ID, message_id=game_channel_button_id)
+                except Exception:
+                    pass
             # ارسال ریپلای
             await context.bot.send_message(
                 chat_id=GAME_CHANNEL_ID,
@@ -432,6 +442,12 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     parse_mode="HTML",
                     reply_markup=None
                 )
+            # حذف پیام دکمه‌ی «اطلاعات بیشتر و خرید» چون اکانت فروخته شد
+            if channel_button_id:
+                try:
+                    await context.bot.delete_message(chat_id=MAIN_CHANNEL_ID, message_id=channel_button_id)
+                except Exception:
+                    pass
             # ارسال ریپلای
             await context.bot.send_message(
                 chat_id=MAIN_CHANNEL_ID,
