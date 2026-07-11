@@ -5,11 +5,13 @@
 import os
 
 # ---- توکن ربات ----
-# مقادیر حساس از متغیر محیطی خوانده می‌شوند (روی سرور در systemd ست شده‌اند).
-TOKEN = os.environ.get("BOT_TOKEN", "")
+TOKEN = os.environ.get("BOT_TOKEN", "8631100472:AAF-KpEbK-LifRfTETfEeKk5qhpEuYx4CYM")
 
 # ---- کاوه‌نگار ----
-KAVENEGAR_API_KEY = os.environ.get("KAVENEGAR_API_KEY", "")
+KAVENEGAR_API_KEY = os.environ.get(
+    "KAVENEGAR_API_KEY",
+    "61395A7A4E785A387534506D4E364C7A6C712B6868505A433634694E4F727934317A5A45527559333032633D",
+)
 KAVENEGAR_TEMPLATE_NEWAGAHI = "telegram-newagahi"
 KAVENEGAR_TEMPLATE_RESID = "telegram-resid"
 KAVENEGAR_TEMPLATE_KHARID = "telegram-kharid"
