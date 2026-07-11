@@ -441,8 +441,6 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
     color_emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}.get(color, "🟢")
     buy_label = f"{color_emoji} اطلاعات بیشتر و خرید"
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(buy_label, url=buy_url)]])
-    # وقتی آلبوم می‌فرستیم دکمه‌ی شیشه‌ای ممکن نیست، پس لینک را داخل کپشن خود آگهی می‌گذاریم
-    caption_with_buy = post_text + f'\n\n<a href="{buy_url}">{buy_label}</a>'
 
     async def _post_to_channel(chat_id):
         # عکس‌ها و فیلم اکانت را کنار هم جمع می‌کنیم
@@ -455,16 +453,23 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
             raw.append(('video', ad['video']))
 
         if len(raw) >= 2:
-            # آلبوم: همه‌ی عکس‌ها و فیلم با هم؛ لینک خرید داخل کپشن همان آگهی
+            # آلبوم عکس‌ها و فیلم با هم (کپشن مشخصات روی اولی).
+            # تلگرام روی آلبوم دکمه نمی‌پذیرد، پس دکمه‌ی خرید را بلافاصله زیرش می‌چسبانیم.
             media = []
             for i, (kind, file_id) in enumerate(raw):
-                cap = caption_with_buy if i == 0 else None
+                cap = post_text if i == 0 else None
                 pm = "HTML" if i == 0 else None
                 if kind == 'video':
                     media.append(InputMediaVideo(media=file_id, caption=cap, parse_mode=pm))
                 else:
                     media.append(InputMediaPhoto(media=file_id, caption=cap, parse_mode=pm))
             sent = await context.bot.send_media_group(chat_id=chat_id, media=media)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="👆 برای مشاهده‌ی کامل و خرید این اکانت، دکمه‌ی زیر را بزنید:",
+                reply_markup=keyboard,
+                reply_to_message_id=sent[0].message_id,
+            )
             return sent[0].message_id
         elif len(raw) == 1:
             kind, file_id = raw[0]

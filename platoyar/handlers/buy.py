@@ -125,47 +125,26 @@ async def process_buy_from_channel(update: Update, context: ContextTypes.DEFAULT
                 final_price = disc['new_price']
                 break
     
-    # اطلاعات کامل اکانت
-    seller_note = escape_html(ad.get('seller_note', '-'))
+    # کاربر عکس/فیلم/مشخصات را در کانال دیده؛ اینجا مستقیم می‌رویم سراغ پرداخت.
     price_text = f"<b>{final_price:,}</b> تومان"
-    
-    product_text = f"""📦 <b>اطلاعات کامل اکانت</b>
 
-🆔 شناسه: {ad_id}
-🎮 بازی: پلاتو
+    payment_text = f"""💰 <b>تکمیل خرید اکانت</b>
 
-⭐ ویپ: {ad.get('vip_count', '-')}
-📊 آیتم: {ad.get('item_count', '-')}
-🪙 سکه: {ad.get('coin_count', '-')}
-💰 پیپ: {ad.get('pip_count', '-')}
-🏆 وین: {ad.get('win_count', '-')}
-📅 سن: {ad.get('account_age', '-')}
-💵 قیمت: {price_text}
+🆔 شناسه آگهی: {ad_id}
+💵 مبلغ قابل پرداخت: {price_text}
 
-📝 توضیحات:
-{seller_note}
+🏦 <b>شماره کارت برای واریز:</b>
+<code>{CARD_NUMBER}</code>
+👤 {CARD_NAME}
+
+📝 مبلغ بالا را به کارت فوق واریز کنید، سپس دکمه «پرداخت انجام شد» را بزنید و تصویر رسید را ارسال کنید.
 {SIGNATURE}"""
-    
-    # ارسال عکس پروفایل با کپشن
-    if ad.get('profile_photo'):
-        await context.bot.send_photo(chat_id=user_id, photo=ad['profile_photo'], caption=product_text, parse_mode="HTML")
-    else:
-        await context.bot.send_message(chat_id=user_id, text=product_text, parse_mode="HTML")
-    
-    # ارسال عکس بازی‌ها
-    if ad.get('games_photo'):
-        await context.bot.send_photo(chat_id=user_id, photo=ad['games_photo'], caption="📸 عکس بازی‌ها و لول‌آپ")
-    
-    # ارسال فیلم
-    if ad.get('video'):
-        await context.bot.send_video(chat_id=user_id, video=ad['video'], caption="🎥 فیلم کامل آیتم‌های اکانت")
-    
-    # دکمه خرید
+
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ بله، قصد خرید دارم", callback_data=f"confirm_buy_{ad_id}", style="success")], 
+        [InlineKeyboardButton("✅ پرداخت انجام شد", callback_data=f"receipt_buy_{ad_id}", style="success")],
         [InlineKeyboardButton("❌ انصراف", callback_data="back_to_main", style="danger")]
     ])
-    await context.bot.send_message(chat_id=user_id, text="❓ آیا قصد خرید این اکانت را دارید؟", reply_markup=keyboard)
+    await context.bot.send_message(chat_id=user_id, text=payment_text, reply_markup=keyboard, parse_mode="HTML")
 
 
 async def confirm_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
