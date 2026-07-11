@@ -75,7 +75,10 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🛒 فروشگاه", callback_data="shop_menu", style="primary")],
         [InlineKeyboardButton("📢 ثبت آگهی", callback_data="agahi_menu", style="success")],
-        [InlineKeyboardButton("🆘 پشتیبانی", callback_data="support_menu", style="danger")]
+        [InlineKeyboardButton("💼 کیف پول", callback_data="wallet_menu", style="primary"),
+         InlineKeyboardButton("📋 آگهی‌های من", callback_data="my_ads_menu", style="primary")],
+        [InlineKeyboardButton("🎁 دعوت دوستان", callback_data="referral_menu", style="primary"),
+         InlineKeyboardButton("🆘 پشتیبانی", callback_data="support_menu", style="danger")],
     ]
     if user_id in ADMIN_IDS:
         keyboard.append([InlineKeyboardButton("🛠 پنل مدیریت", callback_data="admin_panel", style="primary")])
