@@ -17,6 +17,7 @@ from .config import (
     TOKEN, ADMIN_IDS, PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
     BLACKLIST_FILE, WALLET_FILE, REJECT_COUNTER_FILE, PRICE_REQUEST_FILE,
     REJECTED_ADS_FILE, DISCOUNT_REQUEST_FILE, REFERRAL_FILE, USERS_FILE,
+    SHOP_PRICES_FILE,
 )
 from .handlers.router import handle_callbacks, handle_message
 from .handlers.menu import start, chat_id_command
@@ -62,7 +63,7 @@ def _init_data_files():
     files = [PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
              BLACKLIST_FILE, WALLET_FILE, REJECT_COUNTER_FILE,
              PRICE_REQUEST_FILE, REJECTED_ADS_FILE, DISCOUNT_REQUEST_FILE,
-             REFERRAL_FILE, USERS_FILE]
+             REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE]
     for file in files:
         if not os.path.exists(file):
             try:

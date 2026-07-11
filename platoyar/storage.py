@@ -8,7 +8,7 @@ import os
 from .config import (
     WALLET_FILE, PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
     BLACKLIST_FILE, REJECT_COUNTER_FILE, PRICE_REQUEST_FILE, REJECTED_ADS_FILE,
-    REFERRAL_FILE, USERS_FILE,
+    REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE,
 )
 
 
@@ -219,3 +219,12 @@ def load_users():
 
 def save_users(data):
     _write_json(USERS_FILE, data)
+
+
+# ---- قیمت‌های فروشگاه ----
+def load_shop_prices():
+    return _read_json(SHOP_PRICES_FILE, dict)
+
+
+def save_shop_prices(data):
+    _write_json(SHOP_PRICES_FILE, data)

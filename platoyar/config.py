@@ -82,6 +82,7 @@ REJECTED_ADS_FILE = os.path.join(DATA_FOLDER, "rejected_ads.json")
 DISCOUNT_REQUEST_FILE = os.path.join(DATA_FOLDER, "discount_requests.json")
 REFERRAL_FILE = os.path.join(DATA_FOLDER, "referral.json")
 USERS_FILE = os.path.join(DATA_FOLDER, "users.json")  # ثبت همه‌ی کاربرانی که ربات را استارت کرده‌اند
+SHOP_PRICES_FILE = os.path.join(DATA_FOLDER, "shop_prices.json")  # قیمت آیتم‌های فروشگاه (قابل ویرایش ادمین)
 
 # ---- تعرفه‌ها ----
 PRICE_ADMIN_PRICE = 20000
