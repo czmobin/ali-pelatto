@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/
+*.log
+
+# فایل تک‌تکه‌ی قدیمی (شامل توکن) — فقط لوکال
+seler bot (19) (3).py
