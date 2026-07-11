@@ -3,10 +3,11 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from ..config import *
-from .menu import show_main_menu, support_menu, shop_menu, referral_menu
+from .menu import show_main_menu, support_menu, referral_menu
 from .ads import show_agahi_menu
 from .wallet import wallet_menu
 from .myads import my_ads_menu
+from .shop import shop_open
 
 
 # ---- شیم: صدا زدن هندلرهای callback از داخل یک دستور (پیام متنی) ----
@@ -40,7 +41,7 @@ class _CbUpdate:
 
 
 async def cmd_shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await shop_menu(_CbUpdate(update), context)
+    await shop_open(_CbUpdate(update), context)
 
 
 async def cmd_agahi(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -10,6 +10,7 @@ from .admin import *
 from .buy import *
 from .search import *
 from .adminpanel import *
+from .shop import *
 
 
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -47,6 +48,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reject_charge(update, context)
         return
     
+    # فروشگاه
+    if data.startswith("shop:"):
+        await shop_nav(update, context)
+        return
+    if data.startswith("shopok:"):
+        await shop_ok(update, context)
+        return
+
     # پنل مدیریت کاربران
     if data == "admin_panel":
         await show_admin_panel(update, context)
@@ -77,7 +86,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "back_to_main":
         await back_to_main(update, context)
     elif data == "shop_menu":
-        await shop_menu(update, context)
+        await shop_open(update, context)
     elif data == "support_menu":
         await support_menu(update, context)
     elif data == "agahi_menu":
@@ -196,6 +205,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ---- فروشگاه (عکس گیفت / اطلاعات رنک) ----
+    if context.user_data.get('shop_gift'):
+        await shop_receive_gift_photo(update, context)
+        return
+    if context.user_data.get('shop_rank'):
+        await shop_receive_rank_info(update, context)
+        return
+
     # ---- پنل مدیریت (ورودی‌های متنی) ----
     if context.user_data.get('ap_waiting_user_id'):
         await ap_process_user_info(update, context)
