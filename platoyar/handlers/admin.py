@@ -439,8 +439,9 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
 
     buy_url = f"https://t.me/{bot_username}?start=buy_{ad_id}"
     color_emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}.get(color, "🟢")
+    buy_style = {"green": "success", "red": "danger", "blue": "primary"}.get(color, "success")
     buy_label = f"{color_emoji} اطلاعات بیشتر و خرید"
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(buy_label, url=buy_url)]])
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(buy_label, url=buy_url, style=buy_style)]])
 
     async def _post_to_channel(chat_id):
         # عکس‌ها و فیلم اکانت را کنار هم جمع می‌کنیم
