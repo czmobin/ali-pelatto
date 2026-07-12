@@ -141,8 +141,16 @@ def _cat_kb(node_id, is_admin=False):
 
 
 def _clear_shop_flags(context):
-    for k in ("shop_collect", "shop_dig", "shop_setprice", "shop_bulk"):
+    for k in ("shop_collect", "shop_dig", "shop_pending", "shop_setprice", "shop_bulk"):
         context.user_data.pop(k, None)
+
+
+def _pay_kb(nid):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏦 کارت‌به‌کارت", callback_data=f"shoppaycard:{nid}", style="success")],
+        [InlineKeyboardButton("💳 پرداخت آنلاین", callback_data=f"shoppayonline:{nid}", style="primary")],
+        [InlineKeyboardButton("🔙 انصراف", callback_data="back_to_main")],
+    ])
 
 
 # ============================================================
@@ -207,9 +215,25 @@ async def _send_order(context, user, item_label, extra=None, photo=None):
         await broadcast_to_admins(context, text=caption, parse_mode="HTML")
 
 
-async def _finish_ok(update_or_query_msg, label, note=""):
-    await update_or_query_msg.reply_text(
-        f"✅ سفارش شما ثبت شد:\n📦 {label}\n{note}\nادمین به‌زودی قیمت و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}")
+async def _after_info(update, context, nid, info_lines, item_photo):
+    """بعد از گرفتن اطلاعات لازم: اگر قیمت ست است → مرحله‌ی پرداخت، وگرنه سفارش برای هماهنگی به ادمین."""
+    node = NODES[nid]
+    price = _price(nid)
+    if not price:
+        await _send_order(context, update.effective_user, node["label"],
+                          extra="\n".join(info_lines), photo=item_photo)
+        await update.message.reply_text(
+            f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n\n"
+            f"قیمت این مورد هنوز ثبت نشده؛ ادمین به‌زودی مبلغ و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}")
+        return
+    context.user_data["shop_pending"] = {
+        "nid": nid, "label": node["label"], "info": "\n".join(info_lines),
+        "item_photo": item_photo, "price": price,
+    }
+    await update.message.reply_text(
+        f"📦 <b>{node['label']}</b>\n💵 مبلغ قابل پرداخت: <b>{price:,}</b> تومان\n\n"
+        "روش پرداخت را انتخاب کنید:",
+        reply_markup=_pay_kb(nid), parse_mode="HTML")
 
 
 async def shop_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -270,15 +294,9 @@ async def shop_collect_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("❌ لطفاً اطلاعات را به‌صورت متن ارسال کنید.")
         return
     context.user_data.pop("shop_collect", None)
-
-    price = _price(col["nid"])
     label_key = "friendlink" if ask == "photo_friendlink" else ask
-    lines = [f"{_ASK_LABEL[label_key]}: {escape_html(text)}"]
-    if price:
-        lines.append(f"💵 قیمت: {price:,} تومان")
-    await _send_order(context, update.effective_user, node["label"],
-                      extra="\n".join(lines), photo=col.get("photo"))
-    await _finish_ok(update.message, node["label"])
+    info_lines = [f"{_ASK_LABEL[label_key]}: {escape_html(text)}"]
+    await _after_info(update, context, col["nid"], info_lines, col.get("photo"))
 
 
 # ============================================================
@@ -307,47 +325,82 @@ async def shop_digital_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if not node:
         context.user_data.pop("shop_dig", None)
         return
-
-    if dig.get("stage") == "receipt":
-        if not update.message.photo:
-            await update.message.reply_text("❌ لطفاً تصویر رسید پرداخت را ارسال کنید.")
-            return
-        photo = update.message.photo[-1].file_id
-        price = _price(dig["nid"])
-        target = dig.get("target", "-")
-        context.user_data.pop("shop_dig", None)
-        extra = f"🎯 آیدی مقصد: {escape_html(target)}"
-        if price:
-            extra += f"\n💵 مبلغ: {price:,} تومان"
-        await _send_order(context, update.effective_user, node["label"], extra=extra, photo=photo)
-        await update.message.reply_text(
-            f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n🎯 مقصد: {target}\n\n"
-            f"پس از بررسی رسید، سفارش شما انجام می‌شود.\n{SIGNATURE}")
-        return
-
     target = (update.message.text or "").strip()
     if not target:
         await update.message.reply_text("❌ لطفاً آیدی مقصد را به‌صورت متن بفرستید.")
         return
-    dig["target"] = target
-    price = _price(dig["nid"])
+    context.user_data.pop("shop_dig", None)
+    await _after_info(update, context, dig["nid"], [f"🎯 آیدی مقصد: {escape_html(target)}"], None)
 
-    if not price:
-        context.user_data.pop("shop_dig", None)
-        await _send_order(context, update.effective_user, node["label"],
-                          extra=f"🎯 آیدی مقصد: {escape_html(target)}\n💵 قیمت: تعیین نشده (نیاز به اعلام ادمین)")
-        await update.message.reply_text(
-            f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n🎯 مقصد: {target}\n\n"
-            f"قیمت این مورد هنوز ثبت نشده؛ ادمین به‌زودی مبلغ را به شما اعلام می‌کند.\n{SIGNATURE}")
+
+# ============================================================
+# مرحله‌ی پرداخت (کارت‌به‌کارت / درگاه آنلاین) — برای همه‌ی سفارش‌ها
+# ============================================================
+async def shop_pay_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    pend = context.user_data.get("shop_pending")
+    if not pend:
+        await query.message.edit_text("❌ سفارش منقضی شده؛ دوباره از فروشگاه ثبت کنید.")
         return
+    pend["method"] = "کارت‌به‌کارت"
+    pend["await_receipt"] = True
+    await query.message.edit_text(
+        f"🏦 <b>پرداخت کارت‌به‌کارت</b>\n📦 {pend['label']}\n"
+        f"💵 مبلغ: <b>{pend['price']:,}</b> تومان\n\n"
+        f"🏦 شماره کارت:\n<code>{CARD_NUMBER}</code>\n👤 {CARD_NAME}\n\n"
+        f"📝 مبلغ بالا را واریز کنید و سپس <b>تصویر رسید</b> را همین‌جا ارسال کنید.",
+        parse_mode="HTML")
 
-    dig["stage"] = "receipt"
-    pay_text = (f"📦 <b>{node['label']}</b>\n"
-                f"🎯 مقصد: {escape_html(target)}\n"
-                f"💵 مبلغ قابل پرداخت: <b>{price:,}</b> تومان\n\n"
-                f"🏦 <b>شماره کارت برای واریز:</b>\n<code>{CARD_NUMBER}</code>\n👤 {CARD_NAME}\n\n"
-                f"📝 مبلغ بالا را واریز کنید و سپس تصویر رسید را همین‌جا ارسال کنید.\n{SIGNATURE}")
-    await update.message.reply_text(pay_text, parse_mode="HTML")
+
+async def shop_pay_online(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    pend = context.user_data.get("shop_pending")
+    if not pend:
+        await query.message.edit_text("❌ سفارش منقضی شده؛ دوباره از فروشگاه ثبت کنید.")
+        return
+    if not ZIBAL_ENABLED:
+        await query.message.edit_text(
+            f"📦 {pend['label']}\n💵 مبلغ: {pend['price']:,} تومان\n\n"
+            "💳 پرداخت آنلاین به‌زودی فعال می‌شود. فعلاً لطفاً «کارت‌به‌کارت» را انتخاب کنید:",
+            reply_markup=_pay_kb(pend["nid"]))
+        return
+    # درگاه آنلاین وقتی زیردامنه/زیبال آماده شود اینجا پیاده می‌شود.
+    await query.message.edit_text("💳 در حال آماده‌سازی درگاه آنلاین...")
+
+
+async def shop_receive_payment_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pend = context.user_data.get("shop_pending")
+    if not pend or not pend.get("await_receipt"):
+        return
+    if not update.message.photo:
+        await update.message.reply_text("❌ لطفاً تصویر رسید پرداخت را ارسال کنید.")
+        return
+    receipt = update.message.photo[-1].file_id
+    context.user_data.pop("shop_pending", None)
+    await _finalize_paid_order(context, update.effective_user, pend, receipt)
+    await update.message.reply_text(
+        f"✅ سفارش و رسید شما ثبت شد:\n📦 {pend['label']}\n💵 مبلغ: {pend['price']:,} تومان\n\n"
+        f"پس از بررسی رسید، سفارش شما انجام می‌شود.\n{SIGNATURE}")
+
+
+async def _finalize_paid_order(context, user, pend, receipt_photo):
+    uname = f"@{user.username}" if user.username else "—"
+    text = (f"🛒 <b>سفارش فروشگاه (پرداخت‌شده)</b>\n\n"
+            f"📦 {escape_html(pend['label'])}\n"
+            f"{pend['info']}\n"
+            f"💵 مبلغ: {pend['price']:,} تومان\n"
+            f"💳 روش پرداخت: {pend.get('method', '-')}\n"
+            f"👤 {escape_html(user.first_name or '')} ({uname})\n🆔 <code>{user.id}</code>")
+    if pend.get("item_photo"):
+        await broadcast_to_admins(context, photo=pend["item_photo"], caption=text, parse_mode="HTML")
+    else:
+        await broadcast_to_admins(context, text=text, parse_mode="HTML")
+    await broadcast_to_admins(
+        context, photo=receipt_photo,
+        caption=f"🧾 رسید پرداخت سفارش «{escape_html(pend['label'])}» — کاربر <code>{user.id}</code>",
+        parse_mode="HTML")
 
 
 # ============================================================

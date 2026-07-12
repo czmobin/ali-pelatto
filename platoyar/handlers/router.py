@@ -58,6 +58,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("shopbuy:"):
         await shop_buy_digital(update, context)
         return
+    if data.startswith("shoppaycard:"):
+        await shop_pay_card(update, context)
+        return
+    if data.startswith("shoppayonline:"):
+        await shop_pay_online(update, context)
+        return
     if data.startswith("shopprice:"):
         await shop_price_start(update, context)
         return
@@ -215,6 +221,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---- فروشگاه ----
+    if context.user_data.get('shop_pending'):
+        await shop_receive_payment_receipt(update, context)
+        return
     if context.user_data.get('shop_collect'):
         await shop_collect_message(update, context)
         return

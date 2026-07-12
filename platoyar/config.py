@@ -84,6 +84,12 @@ REFERRAL_FILE = os.path.join(DATA_FOLDER, "referral.json")
 USERS_FILE = os.path.join(DATA_FOLDER, "users.json")  # ثبت همه‌ی کاربرانی که ربات را استارت کرده‌اند
 SHOP_PRICES_FILE = os.path.join(DATA_FOLDER, "shop_prices.json")  # قیمت آیتم‌های فروشگاه (قابل ویرایش ادمین)
 
+# ---- درگاه پرداخت زیبال ----
+# تا وقتی زیردامنه‌ی callback (pay.platoyar.com) آماده نشده، خالی می‌ماند و درگاه آنلاین غیرفعال است.
+ZIBAL_MERCHANT = os.environ.get("ZIBAL_MERCHANT", "")
+ZIBAL_CALLBACK_URL = os.environ.get("ZIBAL_CALLBACK_URL", "")
+ZIBAL_ENABLED = bool(ZIBAL_MERCHANT and ZIBAL_CALLBACK_URL)
+
 # ---- تعرفه‌ها ----
 PRICE_ADMIN_PRICE = 20000
 PRICE_CHANNEL_GAME = 50000
