@@ -52,14 +52,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("shop:"):
         await shop_nav(update, context)
         return
-    if data.startswith("shopok:"):
-        await shop_ok(update, context)
-        return
-    if data.startswith("shopgift:"):
-        await shop_gift_start(update, context)
-        return
-    if data.startswith("shoprank:"):
-        await shop_rank_start(update, context)
+    if data.startswith("shopstart:"):
+        await shop_start(update, context)
         return
     if data.startswith("shopbuy:"):
         await shop_buy_digital(update, context)
@@ -221,11 +215,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---- فروشگاه ----
-    if context.user_data.get('shop_gift'):
-        await shop_receive_gift_photo(update, context)
-        return
-    if context.user_data.get('shop_rank'):
-        await shop_receive_rank_info(update, context)
+    if context.user_data.get('shop_collect'):
+        await shop_collect_message(update, context)
         return
     if context.user_data.get('shop_dig'):
         await shop_digital_message(update, context)

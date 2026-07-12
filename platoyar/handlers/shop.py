@@ -1,4 +1,4 @@
-"""فروشگاه پلاتویار — منوی داده‌محور با قیمت قابل‌ویرایش توسط ادمین."""
+"""فروشگاه پلاتویار — منوی داده‌محور، قیمت قابل‌ویرایش ادمین، و گرفتن اطلاعات لازم هر سفارش."""
 import logging
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -14,9 +14,12 @@ logger = logging.getLogger(__name__)
 
 # ============================================================
 # درخت منو
+#   kind: order (پیش‌فرض) | digital | soon
+#   ask : اطلاعاتی که از مشتری گرفته می‌شود:
+#         friendlink | gmail | platoid | photo_friendlink | None
 # ============================================================
-def _leaf(label, kind="order"):
-    return {"label": label, "kind": kind}
+def _leaf(label, kind="order", ask=None):
+    return {"label": label, "kind": kind, "ask": ask}
 
 
 def _cat(label, children):
@@ -38,18 +41,18 @@ _STARS = ["50", "100", "150", "200", "300", "500", "700", "1000000"]
 _PREM = ["۱ ماهه", "۳ ماهه", "۶ ماهه", "۱ ساله"]
 
 _PLATO = _cat("🎮 پلاتو", [
-    _cat("🛍 آیتم‌های شاپ پلاتو", [_leaf(f"آیتم {x} سکه‌ای") for x in _COIN_ITEMS]),
-    _cat("💎 آیتم‌های کمیاب پلاتو", [_leaf(f"آیتم کمیاب {x} سکه‌ای") for x in _COIN_ITEMS]),
+    _cat("🛍 آیتم‌های شاپ پلاتو", [_leaf(f"آیتم {x} سکه‌ای", ask="friendlink") for x in _COIN_ITEMS]),
+    _cat("💎 آیتم‌های کمیاب پلاتو", [_leaf(f"آیتم کمیاب {x} سکه‌ای", ask="friendlink") for x in _COIN_ITEMS]),
     _cat("🔋 شارژ پیپ و سکه", [
-        _cat("💠 شارژ پیپ", [_leaf(f"شارژ {x} پیپ") for x in _PIP]),
-        _cat("🪙 شارژ سکه", [_leaf(f"شارژ {x} کا سکه") for x in _COIN_CHARGE]),
+        _cat("💠 شارژ پیپ", [_leaf(f"شارژ {x} پیپ", ask="gmail") for x in _PIP]),
+        _cat("🪙 شارژ سکه", [_leaf(f"شارژ {x} کا سکه", ask="friendlink") for x in _COIN_CHARGE]),
     ]),
-    _cat("🎁 گیفت آیتم پیپی", [_leaf(f"گیفت آیتم {x} پیپی", kind="gift") for x in _GIFT]),
-    _cat("🏆 وین (برد) فیک", [_leaf(f"وین فیک {x}") for x in _WIN]),
-    _leaf("🎉 آفر استارتر پک (۵۰k سکه + ۱k هایپ + استیکر)"),
-    _leaf("⭐ سفارش گلد کردن رنک", kind="rank"),
-    _cat("🔥 هاله (آتیش)", [_leaf(f"هاله {x}") for x in _HALE]),
-    _cat("🚀 هایپ", [_leaf(f"هایپ {x} تایی") for x in _HYPE]),
+    _cat("🎁 گیفت آیتم پیپی", [_leaf(f"گیفت آیتم {x} پیپی", ask="photo_friendlink") for x in _GIFT]),
+    _cat("🏆 وین (برد) فیک", [_leaf(f"وین فیک {x}", ask="friendlink") for x in _WIN]),
+    _leaf("🎉 آفر استارتر پک", ask="gmail"),
+    _leaf("⭐ سفارش گلد کردن رنک", ask="gmail"),
+    _cat("🔥 هاله (آتیش)", [_leaf(f"هاله {x}", ask="platoid") for x in _HALE]),
+    _cat("🚀 هایپ", [_leaf(f"هایپ {x} تایی", ask="platoid") for x in _HYPE]),
 ])
 
 _PREMIUM = _cat("⭐ پرمیوم تلگرام", [
@@ -70,8 +73,8 @@ NODES = {}
 
 def _flatten(spec, parent_id):
     nid = f"n{len(NODES)}"
-    NODES[nid] = {"label": spec["label"], "parent": parent_id,
-                  "children": [], "kind": spec.get("kind")}
+    NODES[nid] = {"label": spec["label"], "parent": parent_id, "children": [],
+                  "kind": spec.get("kind"), "ask": spec.get("ask")}
     for child in spec.get("children") or []:
         cid = _flatten(child, nid)
         NODES[nid]["children"].append(cid)
@@ -79,6 +82,18 @@ def _flatten(spec, parent_id):
 
 
 ROOT = _flatten(_ROOT_SPEC, None)
+
+# متن راهنمای هر نوع ورودی
+_ASK_PROMPT = {
+    "friendlink": "🔗 لطفاً <b>لینک دوستی</b> خود را ارسال کنید:",
+    "gmail": "📧 لطفاً <b>جیمیل</b> خود را ارسال کنید:",
+    "platoid": "🆔 لطفاً <b>آیدی اکانت پلاتو</b> خود را ارسال کنید:",
+}
+_ASK_LABEL = {
+    "friendlink": "🔗 لینک دوستی",
+    "gmail": "📧 جیمیل",
+    "platoid": "🆔 آیدی پلاتو",
+}
 
 
 # ============================================================
@@ -126,7 +141,7 @@ def _cat_kb(node_id, is_admin=False):
 
 
 def _clear_shop_flags(context):
-    for k in ("shop_gift", "shop_rank", "shop_dig", "shop_setprice", "shop_bulk"):
+    for k in ("shop_collect", "shop_dig", "shop_setprice", "shop_bulk"):
         context.user_data.pop(k, None)
 
 
@@ -155,8 +170,7 @@ async def shop_nav(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                       reply_markup=_cat_kb(nid, adm), parse_mode="HTML")
         return
 
-    kind = node.get("kind")
-    if kind == "soon":
+    if node.get("kind") == "soon":
         await query.message.edit_text("🚧 این بخش به‌زودی اضافه می‌شود.",
                                       reply_markup=InlineKeyboardMarkup([_back_row(node)]))
         return
@@ -166,14 +180,10 @@ async def shop_nav(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"📦 <b>{node['label']}</b>\n\n{price_line}"
 
     rows = []
-    if kind == "digital":
+    if node.get("kind") == "digital":
         rows.append([InlineKeyboardButton("🛒 خرید", callback_data=f"shopbuy:{nid}", style="success")])
-    elif kind == "gift":
-        rows.append([InlineKeyboardButton("🛒 ثبت سفارش (ارسال عکس آیتم)", callback_data=f"shopgift:{nid}", style="success")])
-    elif kind == "rank":
-        rows.append([InlineKeyboardButton("🛒 ثبت سفارش", callback_data=f"shoprank:{nid}", style="success")])
     else:
-        rows.append([InlineKeyboardButton("✅ ثبت سفارش", callback_data=f"shopok:{nid}", style="success")])
+        rows.append([InlineKeyboardButton("🛒 ثبت سفارش", callback_data=f"shopstart:{nid}", style="success")])
     if adm:
         rows.append([InlineKeyboardButton("✏️ تغییر قیمت", callback_data=f"shopprice:{nid}", style="primary")])
     rows.append(_back_row(node))
@@ -181,7 +191,7 @@ async def shop_nav(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================================
-# سفارش ساده (قیمت‌گذاری دستی)
+# ثبت سفارش عادی (با گرفتن اطلاعات لازم)
 # ============================================================
 async def _send_order(context, user, item_label, extra=None, photo=None):
     uname = f"@{user.username}" if user.username else "—"
@@ -197,22 +207,13 @@ async def _send_order(context, user, item_label, extra=None, photo=None):
         await broadcast_to_admins(context, text=caption, parse_mode="HTML")
 
 
-async def shop_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    nid = query.data.split(":", 1)[1]
-    node = NODES.get(nid)
-    if not node:
-        return
-    price = _price(nid)
-    extra = f"💵 قیمت: {price:,} تومان" if price else None
-    await _send_order(context, query.from_user, node["label"], extra=extra)
-    await query.message.edit_text(
-        f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n\nادمین به‌زودی قیمت و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")]]))
+async def _finish_ok(update_or_query_msg, label, note=""):
+    await update_or_query_msg.reply_text(
+        f"✅ سفارش شما ثبت شد:\n📦 {label}\n{note}\nادمین به‌زودی قیمت و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}")
 
 
-async def shop_gift_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def shop_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع ثبت سفارش یک آیتم (غیر دیجیتال)."""
     query = update.callback_query
     await query.answer()
     nid = query.data.split(":", 1)[1]
@@ -220,52 +221,64 @@ async def shop_gift_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not node:
         return
     _clear_shop_flags(context)
-    context.user_data["shop_gift"] = node["label"]
-    await query.message.edit_text(
-        f"📦 <b>{node['label']}</b>\n\n📸 لطفاً عکس آیتم موردنظر را ارسال کنید تا سفارش ثبت شود.",
-        reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
+    ask = node.get("ask")
+
+    if not ask:
+        price = _price(nid)
+        extra = f"💵 قیمت: {price:,} تومان" if price else None
+        await _send_order(context, query.from_user, node["label"], extra=extra)
+        await query.message.edit_text(
+            f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n\nادمین به‌زودی قیمت و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")]]))
+        return
+
+    if ask == "photo_friendlink":
+        context.user_data["shop_collect"] = {"nid": nid, "ask": ask, "stage": "photo"}
+        await query.message.edit_text(
+            f"📦 <b>{node['label']}</b>\n\n📸 لطفاً <b>عکس آیتم موردنظر</b> را ارسال کنید:",
+            reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
+    else:
+        context.user_data["shop_collect"] = {"nid": nid, "ask": ask, "stage": "text"}
+        await query.message.edit_text(
+            f"📦 <b>{node['label']}</b>\n\n{_ASK_PROMPT[ask]}",
+            reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
 
 
-async def shop_rank_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    nid = query.data.split(":", 1)[1]
-    node = NODES.get(nid)
+async def shop_collect_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    col = context.user_data.get("shop_collect")
+    if not col:
+        return
+    node = NODES.get(col["nid"])
     if not node:
+        context.user_data.pop("shop_collect", None)
         return
-    _clear_shop_flags(context)
-    context.user_data["shop_rank"] = node["label"]
-    await query.message.edit_text(
-        f"📦 <b>{node['label']}</b>\n\nلطفاً «لینک دوستی، آیدی و جیمیل» خود را در یک پیام ارسال کنید.",
-        reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
+    ask = col["ask"]
 
-
-async def shop_receive_gift_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    label = context.user_data.get("shop_gift")
-    if not label:
+    # مرحله‌ی عکس (فقط برای گیفت آیتم پیپی)
+    if col["stage"] == "photo":
+        if not update.message.photo:
+            await update.message.reply_text("❌ لطفاً یک عکس از آیتم ارسال کنید.")
+            return
+        col["photo"] = update.message.photo[-1].file_id
+        col["stage"] = "text"
+        await update.message.reply_text("🔗 حالا لطفاً <b>لینک دوستی</b> خود را ارسال کنید:", parse_mode="HTML")
         return
-    if not update.message.photo:
-        await update.message.reply_text("❌ لطفاً یک عکس از آیتم ارسال کنید.")
-        return
-    photo = update.message.photo[-1].file_id
-    context.user_data.pop("shop_gift", None)
-    await _send_order(context, update.effective_user, label, photo=photo)
-    await update.message.reply_text(
-        f"✅ سفارش گیفت شما با عکس ثبت شد:\n📦 {label}\n\nادمین به‌زودی قیمت را اعلام می‌کند.\n{SIGNATURE}")
 
-
-async def shop_receive_rank_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    label = context.user_data.get("shop_rank")
-    if not label:
-        return
+    # مرحله‌ی متن (لینک دوستی / جیمیل / آیدی پلاتو)
     text = update.message.text
     if not text:
-        await update.message.reply_text("❌ لطفاً اطلاعات را به‌صورت متن (لینک دوستی، آیدی و جیمیل) بفرستید.")
+        await update.message.reply_text("❌ لطفاً اطلاعات را به‌صورت متن ارسال کنید.")
         return
-    context.user_data.pop("shop_rank", None)
-    await _send_order(context, update.effective_user, label, extra=f"📝 اطلاعات مشتری:\n{escape_html(text)}")
-    await update.message.reply_text(
-        f"✅ سفارش شما ثبت شد:\n📦 {label}\n\nادمین به‌زودی قیمت و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}")
+    context.user_data.pop("shop_collect", None)
+
+    price = _price(col["nid"])
+    label_key = "friendlink" if ask == "photo_friendlink" else ask
+    lines = [f"{_ASK_LABEL[label_key]}: {escape_html(text)}"]
+    if price:
+        lines.append(f"💵 قیمت: {price:,} تومان")
+    await _send_order(context, update.effective_user, node["label"],
+                      extra="\n".join(lines), photo=col.get("photo"))
+    await _finish_ok(update.message, node["label"])
 
 
 # ============================================================
@@ -312,7 +325,6 @@ async def shop_digital_message(update: Update, context: ContextTypes.DEFAULT_TYP
             f"پس از بررسی رسید، سفارش شما انجام می‌شود.\n{SIGNATURE}")
         return
 
-    # مرحله‌ی گرفتن آیدی مقصد
     target = (update.message.text or "").strip()
     if not target:
         await update.message.reply_text("❌ لطفاً آیدی مقصد را به‌صورت متن بفرستید.")
@@ -321,7 +333,6 @@ async def shop_digital_message(update: Update, context: ContextTypes.DEFAULT_TYP
     price = _price(dig["nid"])
 
     if not price:
-        # قیمت تعیین نشده → سفارش برای هماهنگی به ادمین می‌رود
         context.user_data.pop("shop_dig", None)
         await _send_order(context, update.effective_user, node["label"],
                           extra=f"🎯 آیدی مقصد: {escape_html(target)}\n💵 قیمت: تعیین نشده (نیاز به اعلام ادمین)")
@@ -397,9 +408,9 @@ async def shop_bulk_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(
         f"📈 <b>افزایش گروهی قیمت</b>\n📂 {node['label']}\n\n"
         "میزان افزایش را بفرستید:\n"
-        "• درصدی: مثل <code>10%</code> (۱۰٪ به همه‌ی قیمت‌های این بخش اضافه می‌شود)\n"
-        "• مبلغی: مثل <code>5000</code> (۵۰۰۰ تومان به همه اضافه می‌شود)\n\n"
-        "توجه: فقط روی آیتم‌هایی که قیمت دارند اعمال می‌شود.",
+        "• درصدی: مثل <code>10%</code>\n"
+        "• مبلغی: مثل <code>5000</code>\n\n"
+        "فقط روی آیتم‌هایی که قیمت دارند اعمال می‌شود.",
         reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
 
 
@@ -427,8 +438,7 @@ async def shop_receive_bulk(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except (TypeError, ValueError):
             continue
         new = round(cur * (1 + amount / 100)) if is_percent else round(cur + amount)
-        new = max(0, int(new))
-        prices[leaf_id] = new
+        prices[leaf_id] = max(0, int(new))
         changed += 1
     save_shop_prices(prices)
     how = f"{amount}٪" if is_percent else f"{int(amount):,} تومان"
