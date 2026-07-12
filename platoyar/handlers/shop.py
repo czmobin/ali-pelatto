@@ -210,9 +210,9 @@ async def _send_order(context, user, item_label, extra=None, photo=None):
     if extra:
         caption += f"\n\n{extra}"
     if photo:
-        await broadcast_to_admins(context, photo=photo, caption=caption, parse_mode="HTML")
+        await send_to_target(context, GROUP_SHOP, photo=photo, caption=caption, parse_mode="HTML")
     else:
-        await broadcast_to_admins(context, text=caption, parse_mode="HTML")
+        await send_to_target(context, GROUP_SHOP, text=caption, parse_mode="HTML")
 
 
 async def _after_info(update, context, nid, info_lines, item_photo):
@@ -394,11 +394,11 @@ async def _finalize_paid_order(context, user, pend, receipt_photo):
             f"💳 روش پرداخت: {pend.get('method', '-')}\n"
             f"👤 {escape_html(user.first_name or '')} ({uname})\n🆔 <code>{user.id}</code>")
     if pend.get("item_photo"):
-        await broadcast_to_admins(context, photo=pend["item_photo"], caption=text, parse_mode="HTML")
+        await send_to_target(context, GROUP_SHOP, photo=pend["item_photo"], caption=text, parse_mode="HTML")
     else:
-        await broadcast_to_admins(context, text=text, parse_mode="HTML")
-    await broadcast_to_admins(
-        context, photo=receipt_photo,
+        await send_to_target(context, GROUP_SHOP, text=text, parse_mode="HTML")
+    await send_to_target(
+        context, GROUP_SHOP, photo=receipt_photo,
         caption=f"🧾 رسید پرداخت سفارش «{escape_html(pend['label'])}» — کاربر <code>{user.id}</code>",
         parse_mode="HTML")
 
