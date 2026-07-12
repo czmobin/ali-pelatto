@@ -41,8 +41,8 @@ _STARS = ["50", "100", "150", "200", "300", "500", "700", "1000000"]
 _PREM = ["۱ ماهه", "۳ ماهه", "۶ ماهه", "۱ ساله"]
 
 _PLATO = _cat("🎮 پلاتو", [
-    _cat("🛍 آیتم‌های شاپ پلاتو", [_leaf(f"آیتم {x} سکه‌ای", ask="friendlink") for x in _COIN_ITEMS]),
-    _cat("💎 آیتم‌های کمیاب پلاتو", [_leaf(f"آیتم کمیاب {x} سکه‌ای", ask="friendlink") for x in _COIN_ITEMS]),
+    _cat("🛍 آیتم‌های شاپ پلاتو", [_leaf(f"آیتم {x} سکه‌ای", ask="photo_friendlink") for x in _COIN_ITEMS]),
+    _cat("💎 آیتم‌های کمیاب پلاتو", [_leaf(f"آیتم کمیاب {x} سکه‌ای", ask="photo_friendlink") for x in _COIN_ITEMS]),
     _cat("🔋 شارژ پیپ و سکه", [
         _cat("💠 شارژ پیپ", [_leaf(f"شارژ {x} پیپ", ask="gmail") for x in _PIP]),
         _cat("🪙 شارژ سکه", [_leaf(f"شارژ {x} کا سکه", ask="friendlink") for x in _COIN_CHARGE]),
