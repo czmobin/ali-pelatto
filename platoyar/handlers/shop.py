@@ -224,7 +224,7 @@ async def _after_info(update, context, nid, info_lines, item_photo):
                           extra="\n".join(info_lines), photo=item_photo)
         await update.message.reply_text(
             f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n\n"
-            f"قیمت این مورد هنوز ثبت نشده؛ ادمین به‌زودی مبلغ و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}")
+            f"قیمت این مورد هنوز ثبت نشده؛ ادمین به‌زودی مبلغ و مراحل بعدی را اعلام می‌کند.\n{SHOP_SIGNATURE}")
         return
     context.user_data["shop_pending"] = {
         "nid": nid, "label": node["label"], "info": "\n".join(info_lines),
@@ -252,7 +252,7 @@ async def shop_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         extra = f"💵 قیمت: {price:,} تومان" if price else None
         await _send_order(context, query.from_user, node["label"], extra=extra)
         await query.message.edit_text(
-            f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n\nادمین به‌زودی قیمت و مراحل بعدی را اعلام می‌کند.\n{SIGNATURE}",
+            f"✅ سفارش شما ثبت شد:\n📦 {node['label']}\n\nادمین به‌زودی قیمت و مراحل بعدی را اعلام می‌کند.\n{SHOP_SIGNATURE}",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")]]))
         return
 
@@ -382,7 +382,7 @@ async def shop_receive_payment_receipt(update: Update, context: ContextTypes.DEF
     await _finalize_paid_order(context, update.effective_user, pend, receipt)
     await update.message.reply_text(
         f"✅ سفارش و رسید شما ثبت شد:\n📦 {pend['label']}\n💵 مبلغ: {pend['price']:,} تومان\n\n"
-        f"پس از بررسی رسید، سفارش شما انجام می‌شود.\n{SIGNATURE}")
+        f"پس از بررسی رسید، سفارش شما انجام می‌شود.\n{SHOP_SIGNATURE}")
 
 
 async def _finalize_paid_order(context, user, pend, receipt_photo):
