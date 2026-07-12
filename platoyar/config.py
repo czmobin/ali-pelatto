@@ -62,7 +62,7 @@ GROUP_PRICING = _int_or_none(os.environ.get("GROUP_PRICING", "-1004362886632")) 
 # گروه ۳: شارژ کیف پول + خرید اکانت + رسید تراکنش + برداشت
 GROUP_WALLET = _int_or_none(os.environ.get("GROUP_WALLET", "-1004483394723")) or None
 # گروه فروشگاه: همه‌ی سفارش‌های فروشگاه (پلاتو، کالاف، استارز، پرمیوم و ...)
-GROUP_SHOP = _int_or_none(os.environ.get("GROUP_SHOP", "")) or None
+GROUP_SHOP = _int_or_none(os.environ.get("GROUP_SHOP", "-1003729150291")) or None
 
 # ---- مسیر داده‌ها ----
 # پیش‌فرض: پوشه‌ی data کنار همین پکیج. با BOT_DATA_FOLDER قابل override است.
