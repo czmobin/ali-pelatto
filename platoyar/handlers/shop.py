@@ -127,15 +127,44 @@ def _back_row(node):
     return [InlineKeyboardButton("🔙 بازگشت", callback_data=f"shop:{parent}" if parent else "back_to_main")]
 
 
+def _own_unavailable(nid):
+    return nid in load_shop_unavailable()
+
+
+def _is_unavailable(nid):
+    """ناموجود اگر خودش یا یکی از والدینش ناموجود باشد."""
+    ua = set(load_shop_unavailable())
+    cur = nid
+    while cur:
+        if cur in ua:
+            return True
+        cur = NODES[cur]["parent"]
+    return False
+
+
+def _avail_button(nid):
+    if _own_unavailable(nid):
+        return InlineKeyboardButton("🟢 موجود کردن", callback_data=f"shopavail:{nid}", style="success")
+    return InlineKeyboardButton("🔴 ناموجود کردن", callback_data=f"shopavail:{nid}", style="danger")
+
+
 def _cat_kb(node_id, is_admin=False):
     node = NODES[node_id]
     rows = []
     kids = node["children"]
     for i in range(0, len(kids), 2):
-        rows.append([InlineKeyboardButton(NODES[c]["label"], callback_data=f"shop:{c}")
-                     for c in kids[i:i + 2]])
-    if is_admin and kids:
-        rows.append([InlineKeyboardButton("📈 افزایش گروهی قیمت", callback_data=f"shopbulk:{node_id}")])
+        row = []
+        for c in kids[i:i + 2]:
+            label = NODES[c]["label"]
+            if _own_unavailable(c):
+                label = "🚫 " + label
+            row.append(InlineKeyboardButton(label, callback_data=f"shop:{c}"))
+        rows.append(row)
+    if is_admin:
+        if kids:
+            rows.append([InlineKeyboardButton("📈 افزایش گروهی قیمت", callback_data=f"shopbulk:{node_id}")])
+        if node_id != ROOT:
+            rows.append([_avail_button(node_id)])
     rows.append(_back_row(node))
     return InlineKeyboardMarkup(rows)
 
@@ -168,10 +197,19 @@ async def shop_nav(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     nid = query.data.split(":", 1)[1]
+    await _render_node(query, context, nid, _is_admin(update))
+
+
+async def _render_node(query, context, nid, adm):
     node = NODES.get(nid)
     if not node:
         return
-    adm = _is_admin(update)
+
+    # کاربر عادی نمی‌تواند وارد بخش ناموجود شود
+    if _is_unavailable(nid) and not adm:
+        await query.message.edit_text("🚫 این بخش در حال حاضر ناموجود است.",
+                                      reply_markup=InlineKeyboardMarkup([_back_row(node)]))
+        return
 
     if node["children"]:
         await query.message.edit_text(f"<b>{node['label']}</b>\n\nیک گزینه را انتخاب کنید:",
@@ -186,6 +224,8 @@ async def shop_nav(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price = _price(nid)
     price_line = f"💵 قیمت: <b>{price:,}</b> تومان" if price else "💵 قیمت: با ادمین هماهنگ می‌شود"
     text = f"📦 <b>{node['label']}</b>\n\n{price_line}"
+    if adm and _own_unavailable(nid):
+        text += "\n\n🚫 وضعیت: <b>ناموجود</b>"
 
     rows = []
     if node.get("kind") == "digital":
@@ -194,8 +234,30 @@ async def shop_nav(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows.append([InlineKeyboardButton("🛒 ثبت سفارش", callback_data=f"shopstart:{nid}", style="success")])
     if adm:
         rows.append([InlineKeyboardButton("✏️ تغییر قیمت", callback_data=f"shopprice:{nid}", style="primary")])
+        rows.append([_avail_button(nid)])
     rows.append(_back_row(node))
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(rows), parse_mode="HTML")
+
+
+async def shop_toggle_avail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not _is_admin(update):
+        await query.answer()
+        return
+    nid = query.data.split(":", 1)[1]
+    if nid not in NODES:
+        await query.answer()
+        return
+    ua = load_shop_unavailable()
+    if nid in ua:
+        ua.remove(nid)
+        note = "🟢 موجود شد"
+    else:
+        ua.append(nid)
+        note = "🔴 ناموجود شد"
+    save_shop_unavailable(ua)
+    await query.answer(note)
+    await _render_node(query, context, nid, True)
 
 
 # ============================================================
@@ -243,6 +305,10 @@ async def shop_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nid = query.data.split(":", 1)[1]
     node = NODES.get(nid)
     if not node:
+        return
+    if _is_unavailable(nid):
+        await query.message.edit_text("🚫 این بخش در حال حاضر ناموجود است.",
+                                      reply_markup=InlineKeyboardMarkup([_back_row(node)]))
         return
     _clear_shop_flags(context)
     ask = node.get("ask")
@@ -308,6 +374,10 @@ async def shop_buy_digital(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nid = query.data.split(":", 1)[1]
     node = NODES.get(nid)
     if not node:
+        return
+    if _is_unavailable(nid):
+        await query.message.edit_text("🚫 این بخش در حال حاضر ناموجود است.",
+                                      reply_markup=InlineKeyboardMarkup([_back_row(node)]))
         return
     _clear_shop_flags(context)
     context.user_data["shop_dig"] = {"nid": nid, "stage": "target"}

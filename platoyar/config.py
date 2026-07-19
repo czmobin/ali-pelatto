@@ -92,6 +92,7 @@ DISCOUNT_REQUEST_FILE = os.path.join(DATA_FOLDER, "discount_requests.json")
 REFERRAL_FILE = os.path.join(DATA_FOLDER, "referral.json")
 USERS_FILE = os.path.join(DATA_FOLDER, "users.json")  # ثبت همه‌ی کاربرانی که ربات را استارت کرده‌اند
 SHOP_PRICES_FILE = os.path.join(DATA_FOLDER, "shop_prices.json")  # قیمت آیتم‌های فروشگاه (قابل ویرایش ادمین)
+SHOP_UNAVAILABLE_FILE = os.path.join(DATA_FOLDER, "shop_unavailable.json")  # لیست بخش‌های ناموجود فروشگاه
 
 # ---- درگاه پرداخت زیبال ----
 # تا وقتی زیردامنه‌ی callback (pay.platoyar.com) آماده نشده، خالی می‌ماند و درگاه آنلاین غیرفعال است.

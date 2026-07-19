@@ -8,7 +8,7 @@ import os
 from .config import (
     WALLET_FILE, PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
     BLACKLIST_FILE, REJECT_COUNTER_FILE, PRICE_REQUEST_FILE, REJECTED_ADS_FILE,
-    REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE,
+    REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE, SHOP_UNAVAILABLE_FILE,
 )
 
 
@@ -228,3 +228,13 @@ def load_shop_prices():
 
 def save_shop_prices(data):
     _write_json(SHOP_PRICES_FILE, data)
+
+
+# ---- بخش‌های ناموجود فروشگاه ----
+def load_shop_unavailable():
+    data = _read_json(SHOP_UNAVAILABLE_FILE, list)
+    return data if isinstance(data, list) else []
+
+
+def save_shop_unavailable(data):
+    _write_json(SHOP_UNAVAILABLE_FILE, data)

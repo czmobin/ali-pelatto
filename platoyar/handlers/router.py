@@ -70,6 +70,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("shopbulk:"):
         await shop_bulk_start(update, context)
         return
+    if data.startswith("shopavail:"):
+        await shop_toggle_avail(update, context)
+        return
 
     # پنل مدیریت کاربران
     if data == "admin_panel":
