@@ -89,7 +89,7 @@ async def handle_charge_receipt(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("❌ رد", callback_data=f"reject_charge_{user_id}", style="danger")]
     ]
 
-    await send_to_target(context, GROUP_WALLET, photo=photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    await send_to_target(context, GROUP_ADS, photo=photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     await update.message.reply_text("✅ رسید شما به ادمین ارسال شد.\nپس از تایید، کیف پول شما شارژ می‌شود.")
     context.user_data['waiting_charge_receipt'] = False
 

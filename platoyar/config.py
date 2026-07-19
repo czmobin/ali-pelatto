@@ -65,9 +65,9 @@ def _int_or_none(v):
     except (TypeError, ValueError):
         return None
 
-# گروه ۱: ثبت آگهی جدید و قیمت‌گذاری همان آگهی (+ تخفیف + انتشار)
-GROUP_ADS = _int_or_none(os.environ.get("GROUP_ADS", "-1004317332470")) or None
-# گروه ۲: فقط قیمت‌گذاری
+# گروهِ «ثبت آگهی و قیمت‌گذاری» (گروه ۲) — همه‌ی آگهی‌ها + قیمت‌گذاری + شارژ کیف پول اینجا می‌آید.
+# گروه ۱ قبلی (-1004317332470) دیگر استفاده نمی‌شود.
+GROUP_ADS = _int_or_none(os.environ.get("GROUP_ADS", "-1004362886632")) or None
 GROUP_PRICING = _int_or_none(os.environ.get("GROUP_PRICING", "-1004362886632")) or None
 # گروه ۳: شارژ کیف پول + خرید اکانت + رسید تراکنش + برداشت
 GROUP_WALLET = _int_or_none(os.environ.get("GROUP_WALLET", "-1004483394723")) or None
