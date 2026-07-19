@@ -60,16 +60,20 @@ async def _show(update, text, keyboard=None, parse_mode="HTML"):
         await update.message.reply_text(text, reply_markup=markup, parse_mode=parse_mode)
 
 
-def _panel_keyboard():
-    return [
+def _panel_keyboard(update=None):
+    rows = [
         [InlineKeyboardButton("📊 آمار", callback_data="ap_stats"),
          InlineKeyboardButton("👥 کاربران اخیر", callback_data="ap_users")],
         [InlineKeyboardButton("🔎 اطلاعات کاربر", callback_data="ap_userinfo"),
          InlineKeyboardButton("🔎 سرچ آگهی", callback_data="ap_adsearch")],
         [InlineKeyboardButton("📢 پیام همگانی", callback_data="ap_broadcast"),
          InlineKeyboardButton("✉️ پیام به یک کاربر", callback_data="ap_sendone")],
-        [InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")],
     ]
+    # فقط سوپرادمین دکمه‌ی مدیریت ادمین‌ها را می‌بیند
+    if update is not None and update.effective_user and update.effective_user.id == SUPER_ADMIN_ID:
+        rows.append([InlineKeyboardButton("👮 مدیریت ادمین‌ها", callback_data="ap_admins")])
+    rows.append([InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")])
+    return rows
 
 
 def _back_kb():
@@ -78,7 +82,8 @@ def _back_kb():
 
 def _clear_ap_flags(context):
     for k in ("ap_waiting_user_id", "ap_waiting_broadcast",
-              "ap_waiting_sendone_id", "ap_waiting_sendone_text", "ap_waiting_adsearch"):
+              "ap_waiting_sendone_id", "ap_waiting_sendone_text", "ap_waiting_adsearch",
+              "ap_waiting_admin_id"):
         context.user_data.pop(k, None)
 
 
@@ -94,7 +99,7 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👥 کاربران کل: <b>{len(users)}</b>\n"
         "یک بخش را انتخاب کنید:"
     )
-    await _show(update, text, _panel_keyboard())
+    await _show(update, text, _panel_keyboard(update))
 
 
 # ---- آمار ----
@@ -313,3 +318,66 @@ async def ap_process_sendone_text(update: Update, context: ContextTypes.DEFAULT_
                                         reply_markup=InlineKeyboardMarkup(_back_kb()))
     except Exception as e:
         await update.message.reply_text(f"❌ ارسال ناموفق: {e}", reply_markup=InlineKeyboardMarkup(_back_kb()))
+
+
+# ---- مدیریت ادمین‌ها (فقط سوپرادمین) ----
+def _is_super(update):
+    u = update.effective_user
+    return bool(u and u.id == SUPER_ADMIN_ID)
+
+
+async def ap_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        return
+    _clear_ap_flags(context)
+    users = load_users()
+    lines = ["👮 <b>مدیریت ادمین‌ها</b>", "━━━━━━━━━━━━━━━━━━━━"]
+    rows = []
+    for aid in ADMIN_IDS:
+        rec = users.get(str(aid), {})
+        uname = f"@{rec['username']}" if rec.get("username") else ""
+        tag = " (سوپرادمین)" if aid == SUPER_ADMIN_ID else ""
+        lines.append(f"🆔 <code>{aid}</code> {escape_html(rec.get('first_name',''))} {uname}{tag}")
+        if aid != SUPER_ADMIN_ID:
+            rows.append([InlineKeyboardButton(f"❌ حذف {aid}", callback_data=f"ap_admindel_{aid}")])
+    rows.append([InlineKeyboardButton("➕ افزودن ادمین", callback_data="ap_adminadd")])
+    rows.append([InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")])
+    await _show(update, "\n".join(lines), rows)
+
+
+async def ap_admin_add_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        return
+    _clear_ap_flags(context)
+    context.user_data["ap_waiting_admin_id"] = True
+    await _show(update, "➕ آیدی عددی ادمین جدید را ارسال کنید:",
+                [[InlineKeyboardButton("🔙 مدیریت ادمین‌ها", callback_data="ap_admins")]])
+
+
+async def ap_process_admin_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("ap_waiting_admin_id", None)
+    if update.effective_user.id != SUPER_ADMIN_ID:
+        return
+    txt = (update.message.text or "").strip()
+    if not txt.isdigit():
+        await update.message.reply_text("❌ آیدی نامعتبر. یک عدد بفرست.",
+                                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 مدیریت ادمین‌ها", callback_data="ap_admins")]]))
+        return
+    added = add_admin(int(txt))
+    msg = f"✅ ادمین <code>{txt}</code> اضافه شد." if added else f"ℹ️ <code>{txt}</code> از قبل ادمین بود."
+    await update.message.reply_text(msg, parse_mode="HTML",
+                                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 مدیریت ادمین‌ها", callback_data="ap_admins")]]))
+    try:
+        await context.bot.send_message(chat_id=int(txt), text="✅ شما به‌عنوان ادمین ربات پلاتویار اضافه شدید.")
+    except Exception:
+        pass
+
+
+async def ap_admin_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        await update.callback_query.answer()
+        return
+    uid = int(update.callback_query.data.split("_")[-1])
+    remove_admin(uid)
+    await update.callback_query.answer("حذف شد")
+    await ap_admins(update, context)

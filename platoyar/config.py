@@ -3,6 +3,7 @@
 # مقادیر حساس با متغیر محیطی قابل تغییرند (برای سرور).
 # ============================================================
 import os
+import json
 
 # ---- توکن ربات ----
 TOKEN = os.environ.get("BOT_TOKEN", "8631100472:AAF-KpEbK-LifRfTETfEeKk5qhpEuYx4CYM")
@@ -22,7 +23,9 @@ KAVENEGAR_TEMPLATE_GHEYMAT_OK = "telegram-gheymatok"
 
 # ---- ادمین‌ها ----
 ADMIN_ID = 7528842090                 # ادمین اصلی (مقصد پیش‌فرض برخی سازگاری‌ها)
-ADMIN_IDS = [7528842090, 127679626]   # همه‌ی ادمین‌ها؛ اولی ادمین اصلی است
+SUPER_ADMIN_ID = 7528842090           # فقط این اکانت می‌تواند ادمین اضافه/حذف کند (@PLATOYAR2)
+# ادمین‌های پایه (لیستِ زنده؛ در جای خود mutate می‌شود تا همه‌ی ماژول‌ها همان شیء را ببینند)
+ADMIN_IDS = [7528842090, 127679626, 1301523142]
 ADMIN_USERNAME = "@PLATOYAR2"
 ADMIN_PHONE = "09919173528"
 SUPPORT_CHANNEL = "@PLATOYARSHOP_bot"
@@ -93,6 +96,16 @@ REFERRAL_FILE = os.path.join(DATA_FOLDER, "referral.json")
 USERS_FILE = os.path.join(DATA_FOLDER, "users.json")  # ثبت همه‌ی کاربرانی که ربات را استارت کرده‌اند
 SHOP_PRICES_FILE = os.path.join(DATA_FOLDER, "shop_prices.json")  # قیمت آیتم‌های فروشگاه (قابل ویرایش ادمین)
 SHOP_UNAVAILABLE_FILE = os.path.join(DATA_FOLDER, "shop_unavailable.json")  # لیست بخش‌های ناموجود فروشگاه
+ADMINS_FILE = os.path.join(DATA_FOLDER, "admins.json")  # ادمین‌های اضافه‌شده در زمان اجرا
+
+# ادمین‌های ذخیره‌شده در فایل را به لیست زنده اضافه کن (بدون ساختن شیء جدید)
+try:
+    with open(ADMINS_FILE, encoding="utf-8") as _af:
+        for _a in json.load(_af):
+            if int(_a) not in ADMIN_IDS:
+                ADMIN_IDS.append(int(_a))
+except Exception:
+    pass
 
 # ---- درگاه پرداخت زیبال ----
 # تا وقتی زیردامنه‌ی callback (pay.platoyar.com) آماده نشده، خالی می‌ماند و درگاه آنلاین غیرفعال است.

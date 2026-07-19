@@ -9,6 +9,7 @@ from .config import (
     WALLET_FILE, PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
     BLACKLIST_FILE, REJECT_COUNTER_FILE, PRICE_REQUEST_FILE, REJECTED_ADS_FILE,
     REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE, SHOP_UNAVAILABLE_FILE,
+    ADMINS_FILE, ADMIN_IDS, SUPER_ADMIN_ID,
 )
 
 
@@ -238,3 +239,29 @@ def load_shop_unavailable():
 
 def save_shop_unavailable(data):
     _write_json(SHOP_UNAVAILABLE_FILE, data)
+
+
+# ---- مدیریت ادمین‌ها (زمان اجرا) ----
+def _save_admins():
+    _write_json(ADMINS_FILE, ADMIN_IDS)
+
+
+def add_admin(uid):
+    """ادمین جدید اضافه می‌کند (لیست زنده را در جای خود تغییر می‌دهد)."""
+    uid = int(uid)
+    if uid not in ADMIN_IDS:
+        ADMIN_IDS.append(uid)
+        _save_admins()
+        return True
+    return False
+
+
+def remove_admin(uid):
+    uid = int(uid)
+    if uid == SUPER_ADMIN_ID:
+        return False  # سوپرادمین قابل حذف نیست
+    if uid in ADMIN_IDS:
+        ADMIN_IDS.remove(uid)
+        _save_admins()
+        return True
+    return False

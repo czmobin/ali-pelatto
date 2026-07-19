@@ -99,6 +99,15 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("ap_owner_"):
         await ap_owner_info(update, context)
         return
+    if data == "ap_admins":
+        await ap_admins(update, context)
+        return
+    if data == "ap_adminadd":
+        await ap_admin_add_prompt(update, context)
+        return
+    if data.startswith("ap_admindel_"):
+        await ap_admin_remove(update, context)
+        return
 
     # بقیه دکمه‌ها
     if data == "back_to_main":
@@ -257,6 +266,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if context.user_data.get('ap_waiting_sendone_text'):
         await ap_process_sendone_text(update, context)
+        return
+    if context.user_data.get('ap_waiting_admin_id'):
+        await ap_process_admin_add(update, context)
         return
 
     if context.user_data.get('reject_other_ad_id'):
