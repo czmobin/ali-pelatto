@@ -19,6 +19,7 @@ _ACTION_PREFIXES = (
     "price_set_", "reject_price_only_", "confirm_charge_", "reject_charge_",
     "withdraw_approve_", "withdraw_reject_", "confirm_sale_", "reject_sale_",
     "approve_discount_", "reject_discount_", "confirm_publish_",
+    "propose_price_", "approveprop_", "rejectprop_",
 )
 
 
@@ -223,6 +224,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cancel_ad_confirm(update, context)
     elif data.startswith("confirm_publish_"):
         await confirm_publish_ad(update, context)
+    elif data.startswith("propose_price_"):
+        await propose_price_start(update, context)
+    elif data.startswith("approveprop_"):
+        await approve_proposed_price(update, context)
+    elif data.startswith("rejectprop_"):
+        await reject_proposed_price(update, context)
     elif data.startswith("confirm_cancel_ad_"):
         await confirm_cancel_ad(update, context)
     elif data.startswith("request_discount_"):
@@ -315,6 +322,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if context.user_data.get('set_price_ad_id'):
         await process_set_price(update, context)
+        return
+    if context.user_data.get('propose_price_ad_id'):
+        await process_proposed_price(update, context)
         return
     if context.user_data.get('set_price_only_id'):
         await process_set_price_only(update, context)

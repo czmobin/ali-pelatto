@@ -328,7 +328,10 @@ async def set_button_color(update: Update, context: ContextTypes.DEFAULT_TYPE, a
                 chat_id=ad['user_id'],
                 text=(f"💰 قیمت آگهی شما توسط تیم پشتیبانی تعیین شد: <b>{price_disp}</b>\n\n"
                       f"در صورت تایید شما و انتشار آگهی در چنل‌های ذکرشده، دکمه‌ی زیر را بزنید:\n{SIGNATURE}"),
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("تایید درخواست ✅", callback_data=f"confirm_publish_{ad_id}", style="success")]]),
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("تایید درخواست ✅", callback_data=f"confirm_publish_{ad_id}", style="success")],
+                    [InlineKeyboardButton("❌ رد و پیشنهاد قیمت", callback_data=f"propose_price_{ad_id}", style="danger")],
+                ]),
                 parse_mode="HTML")
         except Exception as e:
             logger.error(f"ارسال تایید قیمت به کاربر ناموفق: {e}")
@@ -354,6 +357,113 @@ async def confirm_publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE)
     color = ad.get('button_color', 'green')
     await query.message.edit_text("✅ آگهی شما تایید شد و در حال انتشار در چنل است...")
     await publish_ad(update, context, ad_id, color)
+
+
+async def _send_price_confirmation(context, ad_id, ad):
+    """پیام تعیین قیمت را با دو دکمه (تایید / رد و پیشنهاد قیمت) دوباره برای کاربر می‌فرستد."""
+    price = ad.get('price')
+    price_disp = f"{price:,} تومان" if isinstance(price, int) else str(price)
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("تایید درخواست ✅", callback_data=f"confirm_publish_{ad_id}", style="success")],
+        [InlineKeyboardButton("❌ رد و پیشنهاد قیمت", callback_data=f"propose_price_{ad_id}", style="danger")],
+    ])
+    try:
+        await context.bot.send_message(
+            chat_id=ad['user_id'],
+            text=(f"💰 قیمت آگهی شما توسط تیم پشتیبانی: <b>{price_disp}</b>\n\n"
+                  f"✅ برای انتشار «تایید درخواست» — ❌ برای پیشنهاد قیمت دیگر «رد و پیشنهاد قیمت».\n{SIGNATURE}"),
+            reply_markup=kb, parse_mode="HTML")
+    except Exception as e:
+        logger.error(f"ارسال مجدد تایید قیمت ناموفق: {e}")
+
+
+async def propose_price_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """کاربر قیمت ادمین را رد کرد و می‌خواهد قیمت خودش را پیشنهاد دهد."""
+    query = update.callback_query
+    await query.answer()
+    ad_id = int(query.data.split("_")[2])
+    pending_ads = load_pending_ads()
+    ad = pending_ads.get(str(ad_id))
+    if not ad or query.from_user.id != ad.get('user_id'):
+        return
+    context.user_data['propose_price_ad_id'] = ad_id
+    await query.message.edit_text(
+        "با توجه به قیمت اعلامیِ ما، لطفاً <b>قیمت پیشنهادی خود</b> برای ثبت آگهی را به تومان وارد کنید (فقط عدد):",
+        parse_mode="HTML")
+
+
+async def process_proposed_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    ad_id = context.user_data.get('propose_price_ad_id')
+    if not ad_id:
+        return
+    try:
+        price = int(update.message.text.replace(',', '').replace('،', '').strip())
+        if price <= 0:
+            raise ValueError
+    except Exception:
+        await update.message.reply_text("❌ قیمت نامعتبر. فقط عدد بفرست.")
+        return
+    context.user_data.pop('propose_price_ad_id', None)
+    pending_ads = load_pending_ads()
+    ad = pending_ads.get(str(ad_id))
+    if not ad:
+        await update.message.reply_text("❌ آگهی یافت نشد.")
+        return
+    ad['proposed_price'] = price
+    save_pending_ads(pending_ads)
+
+    admin_price = ad.get('price')
+    txt = (f"💬 <b>پیشنهاد قیمت جدید از فروشنده</b>\n\n"
+           f"🆔 آگهی: {ad_id}\n"
+           f"👤 فروشنده: {user_mention(ad['user_id'], ad.get('user_name'))}\n"
+           f"🆔 آیدی عددی: <code>{ad['user_id']}</code>\n"
+           f"💰 قیمت اعلامیِ ادمین: {admin_price:,} تومان\n"
+           f"💵 قیمت پیشنهادیِ فروشنده: <b>{price:,}</b> تومان")
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ تایید قیمت پیشنهادی و انتشار", callback_data=f"approveprop_{ad_id}", style="success")],
+        [InlineKeyboardButton("❌ رد پیشنهاد", callback_data=f"rejectprop_{ad_id}", style="danger")],
+    ])
+    await send_to_target(context, GROUP_ADS, text=txt, reply_markup=kb, parse_mode="HTML")
+    await update.message.reply_text(
+        f"✅ قیمت پیشنهادی شما ({price:,} تومان) به تیم پشتیبانی ارسال شد.\nپس از بررسی به شما اطلاع داده می‌شود.\n{SIGNATURE}",
+        parse_mode="HTML")
+
+
+async def approve_proposed_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    ad_id = int(query.data.split("_")[1])
+    pending_ads = load_pending_ads()
+    ad = pending_ads.get(str(ad_id))
+    if not ad:
+        await query.message.edit_text("❌ آگهی یافت نشد یا قبلاً منتشر شده است.")
+        return
+    ad['price'] = ad.get('proposed_price', ad.get('price'))
+    save_pending_ads(pending_ads)
+    color = ad.get('button_color', 'green')
+    await query.message.edit_text("✅ قیمت پیشنهادی فروشنده تایید شد. در حال انتشار در چنل...")
+    await publish_ad(update, context, ad_id, color)
+
+
+async def reject_proposed_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    ad_id = int(query.data.split("_")[1])
+    pending_ads = load_pending_ads()
+    ad = pending_ads.get(str(ad_id))
+    await query.message.edit_text(f"❌ پیشنهاد قیمت فروشنده برای آگهی {ad_id} رد شد.")
+    if ad:
+        try:
+            await context.bot.send_message(
+                chat_id=ad['user_id'],
+                text=f"❌ قیمت پیشنهادی شما برای آگهی {ad_id} پذیرفته نشد. قیمت اعلامیِ ما همان قبلی است:")
+        except Exception:
+            pass
+        await _send_price_confirmation(context, ad_id, ad)
 
 
 async def set_price_and_approve(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id):
