@@ -90,13 +90,16 @@ async def agahi_profile_complete(update: Update, context: ContextTypes.DEFAULT_T
     profiles = load_profiles()
     if str(user_id) not in profiles:
         profiles[str(user_id)] = {}
-    
-    context.user_data['profile_step'] = 'waiting_name'
+    # نام خودکار از تلگرام گرفته می‌شود (مرحله‌ی نام حذف شد)
+    profiles[str(user_id)]['name'] = query.from_user.first_name or 'کاربر'
+    save_profiles(profiles)
+
+    context.user_data['profile_step'] = 'waiting_phone'
     context.user_data['return_to'] = 'agahi_menu'
-    
+
     await query.message.edit_text(
         "👤 <b>تکمیل پروفایل کاربری</b>\n\n"
-        "لطفاً نام و نام خانوادگی خود را وارد کنید:",
+        "📞 شماره موبایل خود را وارد کنید:",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 انصراف", callback_data="cancel_operation", style="danger")]
         ]),
@@ -105,13 +108,23 @@ async def agahi_profile_complete(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def start_profile_completion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # نام خودکار از تلگرام گرفته می‌شود (مرحله‌ی نام حذف شد)
+    user = update.effective_user
+    profiles = load_profiles()
+    if str(user.id) not in profiles:
+        profiles[str(user.id)] = {}
+    profiles[str(user.id)]['name'] = user.first_name or 'کاربر'
+    save_profiles(profiles)
+
+    prompt = "👤 <b>تکمیل پروفایل کاربری</b>\n\n📞 شماره موبایل خود را وارد کنید:"
+    cancel = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="cancel_operation", style="danger")]])
     if hasattr(update, 'callback_query') and update.callback_query:
         query = update.callback_query
         await query.answer()
-        sent_msg = await query.message.edit_text("👤 <b>تکمیل پروفایل کاربری</b>\n\nلطفاً نام و نام خانوادگی خود را وارد کنید:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="cancel_operation", style="danger")]]), parse_mode="HTML")
+        sent_msg = await query.message.edit_text(prompt, reply_markup=cancel, parse_mode="HTML")
     else:
-        sent_msg = await update.message.reply_text("👤 <b>تکمیل پروفایل کاربری</b>\n\nلطفاً نام و نام خانوادگی خود را وارد کنید:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="cancel_operation", style="danger")]]), parse_mode="HTML")
-    context.user_data['profile_step'] = 'waiting_name'
+        sent_msg = await update.message.reply_text(prompt, reply_markup=cancel, parse_mode="HTML")
+    context.user_data['profile_step'] = 'waiting_phone'
     context.user_data['last_question_msg_id'] = sent_msg.message_id
 
 

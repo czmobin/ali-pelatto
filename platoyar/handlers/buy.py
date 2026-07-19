@@ -91,9 +91,15 @@ async def process_buy_from_channel(update: Update, context: ContextTypes.DEFAULT
     user_id = update.effective_user.id
     
     if not is_profile_complete(user_id):
+        # نام خودکار از تلگرام؛ مستقیم شماره موبایل را می‌گیریم
+        profiles = load_profiles()
+        if str(user_id) not in profiles:
+            profiles[str(user_id)] = {}
+        profiles[str(user_id)]['name'] = update.effective_user.first_name or 'کاربر'
+        save_profiles(profiles)
         context.user_data['return_to_buy'] = ad_id
-        await update.message.reply_text("👤 برای خرید ابتدا پروفایل خود را تکمیل کنید.\nلطفاً نام و نام خانوادگی خود را وارد کنید:")
-        context.user_data['profile_step'] = 'waiting_name'
+        await update.message.reply_text("👤 برای خرید ابتدا پروفایل خود را تکمیل کنید.\n📞 شماره موبایل خود را وارد کنید:")
+        context.user_data['profile_step'] = 'waiting_phone'
         context.user_data['profile_for_buy'] = True
         return
     
