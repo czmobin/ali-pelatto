@@ -514,6 +514,22 @@ async def _finalize_paid_order(context, user, pend, receipt_photo):
 # ============================================================
 # مدیریت سفارش‌ها توسط ادمین (انجام شد / رد)
 # ============================================================
+async def _append_status_to_msg(message, status_line):
+    """وضعیت را به همان پیام سفارش در گروه اضافه می‌کند و دکمه‌ها را برمی‌دارد."""
+    try:
+        if message.caption is not None:
+            await message.edit_caption(caption=(message.caption_html or "") + status_line,
+                                       reply_markup=None, parse_mode="HTML")
+        elif message.text is not None:
+            await message.edit_text((message.text_html or "") + status_line,
+                                    reply_markup=None, parse_mode="HTML")
+    except Exception:
+        try:
+            await message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
+
 async def shop_order_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not _is_admin(update):
@@ -528,17 +544,15 @@ async def shop_order_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     o["status"] = "done"
     save_shop_orders(orders)
     await query.answer("✅ انجام شد")
-    try:
-        await query.edit_message_reply_markup(reply_markup=None)
-    except Exception:
-        pass
+    # وضعیت را روی همان پیام سفارش بنویس
+    await _append_status_to_msg(query.message,
+                               f"\n\n━━━━━━━━\n✅ <b>سفارش انجام شد</b> (توسط ادمین)")
     try:
         await context.bot.send_message(
             chat_id=o["user_id"],
             text=f"✅ سفارش «{o['item']}» شما با موفقیت انجام شد.\n{SHOP_SIGNATURE}", parse_mode="HTML")
     except Exception:
         pass
-    await query.message.reply_text(f"✅ سفارش کد {oid} انجام شد و به مشتری اطلاع داده شد.")
 
 
 async def shop_order_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -548,14 +562,20 @@ async def shop_order_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     oid = query.data.rsplit("_", 1)[1]
     await query.answer()
-    context.user_data["shop_order_reject_id"] = oid
+    msg = query.message
+    context.user_data["shop_order_reject"] = {
+        "oid": oid, "chat": msg.chat_id, "msg_id": msg.message_id,
+        "is_caption": msg.caption is not None,
+        "orig": (msg.caption_html if msg.caption is not None else msg.text_html) or "",
+    }
     await query.message.reply_text(f"❌ دلیل رد سفارش کد {oid} را بنویسید:")
 
 
 async def shop_order_reject_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    oid = context.user_data.pop("shop_order_reject_id", None)
-    if not oid:
+    info = context.user_data.pop("shop_order_reject", None)
+    if not info:
         return
+    oid = info["oid"]
     reason = (update.message.text or "").strip() or "-"
     orders = load_shop_orders()
     o = orders.get(oid)
@@ -570,7 +590,19 @@ async def shop_order_reject_process(update: Update, context: ContextTypes.DEFAUL
                 parse_mode="HTML")
         except Exception:
             pass
-    await update.message.reply_text(f"✅ سفارش کد {oid} رد شد و به مشتری اطلاع داده شد.")
+    # دلیل رد را روی همان پیام سفارش در گروه بنویس
+    status_line = f"\n\n━━━━━━━━\n❌ <b>سفارش رد شد</b> (توسط ادمین)\n📝 دلیل: {escape_html(reason)}"
+    try:
+        if info["is_caption"]:
+            await context.bot.edit_message_caption(
+                chat_id=info["chat"], message_id=info["msg_id"],
+                caption=info["orig"] + status_line, reply_markup=None, parse_mode="HTML")
+        else:
+            await context.bot.edit_message_text(
+                chat_id=info["chat"], message_id=info["msg_id"],
+                text=info["orig"] + status_line, reply_markup=None, parse_mode="HTML")
+    except Exception:
+        pass
 
 
 # ============================================================

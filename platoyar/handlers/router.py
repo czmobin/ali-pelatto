@@ -250,7 +250,7 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---- فروشگاه ----
-    if context.user_data.get('shop_order_reject_id'):
+    if context.user_data.get('shop_order_reject'):
         await shop_order_reject_process(update, context)
         return
     if context.user_data.get('shop_pending'):
