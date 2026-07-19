@@ -1,5 +1,6 @@
 """فروشگاه پلاتویار — منوی داده‌محور، قیمت قابل‌ویرایش ادمین، و گرفتن اطلاعات لازم هر سفارش."""
 import logging
+import re
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -378,9 +379,13 @@ async def shop_collect_message(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     # مرحله‌ی متن (لینک دوستی / جیمیل / آیدی پلاتو)
-    text = update.message.text
+    text = (update.message.text or "").strip()
     if not text:
         await update.message.reply_text("❌ لطفاً اطلاعات را به‌صورت متن ارسال کنید.")
+        return
+    # اعتبارسنجی ساده‌ی جیمیل
+    if ask == "gmail" and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", text):
+        await update.message.reply_text("❌ جیمیل نامعتبر است. مثل <code>name@gmail.com</code> بفرست:", parse_mode="HTML")
         return
     context.user_data.pop("shop_collect", None)
     label_key = "friendlink" if ask == "photo_friendlink" else ask
