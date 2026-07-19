@@ -49,7 +49,7 @@ _PLATO = _cat("🎮 پلاتو", [
         _cat("🪙 شارژ سکه", [_leaf(f"شارژ {x} کا سکه", ask="friendlink") for x in _COIN_CHARGE]),
     ]),
     _cat("🎁 گیفت آیتم پیپی", [_leaf(f"گیفت آیتم {x} پیپی", ask="photo_friendlink") for x in _GIFT]),
-    _cat("🏆 وین (برد) فیک", [_leaf(f"وین فیک {x}", ask="friendlink") for x in _WIN]),
+    _cat("🏆 وین (برد) فیک", [_leaf(f"وین فیک {x}", ask="gmail_friendlink") for x in _WIN]),
     _leaf("🎉 آفر استارتر پک", ask="gmail"),
     _leaf("⭐ سفارش گلد کردن رنک", ask="gmail"),
     _cat("🔥 هاله (آتیش)", [_leaf(f"هاله {x}", ask="platoid") for x in _HALE]),
@@ -347,15 +347,15 @@ async def shop_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if ask == "photo_friendlink":
-        context.user_data["shop_collect"] = {"nid": nid, "ask": ask, "stage": "photo"}
-        await query.message.edit_text(
-            f"📦 <b>{node['label']}</b>\n\n📸 لطفاً <b>عکس آیتم موردنظر</b> را ارسال کنید:",
-            reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
+        stage, prompt = "photo", "📸 لطفاً <b>عکس آیتم موردنظر</b> را ارسال کنید:"
+    elif ask == "gmail_friendlink":
+        stage, prompt = "gmail", "📧 لطفاً <b>جیمیل اکانت</b> را ارسال کنید:"
     else:
-        context.user_data["shop_collect"] = {"nid": nid, "ask": ask, "stage": "text"}
-        await query.message.edit_text(
-            f"📦 <b>{node['label']}</b>\n\n{_ASK_PROMPT[ask]}",
-            reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
+        stage, prompt = "text", _ASK_PROMPT[ask]
+    context.user_data["shop_collect"] = {"nid": nid, "ask": ask, "stage": stage}
+    await query.message.edit_text(
+        f"📦 <b>{node['label']}</b>\n\n{prompt}",
+        reply_markup=InlineKeyboardMarkup([_back_row(node)]), parse_mode="HTML")
 
 
 async def shop_collect_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -368,7 +368,7 @@ async def shop_collect_message(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     ask = col["ask"]
 
-    # مرحله‌ی عکس (فقط برای گیفت آیتم پیپی)
+    # مرحله‌ی عکس (گیفت آیتم پیپی / آیتم شاپ و کمیاب)
     if col["stage"] == "photo":
         if not update.message.photo:
             await update.message.reply_text("❌ لطفاً یک عکس از آیتم ارسال کنید.")
@@ -378,18 +378,35 @@ async def shop_collect_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text("🔗 حالا لطفاً <b>لینک دوستی</b> خود را ارسال کنید:", parse_mode="HTML")
         return
 
-    # مرحله‌ی متن (لینک دوستی / جیمیل / آیدی پلاتو)
+    # مرحله‌ی جیمیل (وین فیک: اول جیمیل بعد لینک دوستی)
+    if col["stage"] == "gmail":
+        gm = (update.message.text or "").strip()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", gm):
+            await update.message.reply_text("❌ جیمیل نامعتبر است. مثل <code>name@gmail.com</code> بفرست:", parse_mode="HTML")
+            return
+        col["gmail"] = gm
+        col["stage"] = "text"
+        await update.message.reply_text("🔗 حالا لطفاً <b>لینک دوستی همین اکانت</b> را ارسال کنید:", parse_mode="HTML")
+        return
+
+    # مرحله‌ی متن نهایی (لینک دوستی / جیمیل / آیدی پلاتو)
     text = (update.message.text or "").strip()
     if not text:
         await update.message.reply_text("❌ لطفاً اطلاعات را به‌صورت متن ارسال کنید.")
         return
-    # اعتبارسنجی ساده‌ی جیمیل
+    # اعتبارسنجی جیمیلِ تکی
     if ask == "gmail" and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", text):
         await update.message.reply_text("❌ جیمیل نامعتبر است. مثل <code>name@gmail.com</code> بفرست:", parse_mode="HTML")
         return
     context.user_data.pop("shop_collect", None)
-    label_key = "friendlink" if ask == "photo_friendlink" else ask
-    info_lines = [f"{_ASK_LABEL[label_key]}: {escape_html(text)}"]
+
+    info_lines = []
+    if col.get("gmail"):
+        info_lines.append(f"📧 جیمیل: {escape_html(col['gmail'])}")
+    if ask in ("photo_friendlink", "gmail_friendlink"):
+        info_lines.append(f"🔗 لینک دوستی: {escape_html(text)}")
+    else:
+        info_lines.append(f"{_ASK_LABEL[ask]}: {escape_html(text)}")
     await _after_info(update, context, col["nid"], info_lines, col.get("photo"))
 
 
