@@ -178,6 +178,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await view_single_ad(update, context)
     elif data.startswith("cancel_ad_"):
         await cancel_ad_confirm(update, context)
+    elif data.startswith("confirm_publish_"):
+        await confirm_publish_ad(update, context)
     elif data.startswith("confirm_cancel_ad_"):
         await confirm_cancel_ad(update, context)
     elif data.startswith("request_discount_"):

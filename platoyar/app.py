@@ -21,7 +21,7 @@ from .config import (
 )
 from .handlers.router import handle_callbacks, handle_message
 from .handlers.menu import start, chat_id_command
-from .handlers.admin import search_admin_command
+from .handlers.admin import search_admin_command, cash_command, ads_db_command
 from .handlers.adminpanel import show_admin_panel, on_my_chat_member
 from .handlers.commands import (
     cmd_shop, cmd_agahi, cmd_wallet, cmd_myads, cmd_referral, cmd_support,
@@ -86,6 +86,9 @@ def main():
     app.add_handler(CommandHandler("searchadmin", search_admin_command))
     app.add_handler(CommandHandler("id", chat_id_command))
     app.add_handler(CommandHandler("panel", show_admin_panel))
+    app.add_handler(CommandHandler("cash", cash_command))
+    app.add_handler(CommandHandler("ad", ads_db_command))
+    app.add_handler(CommandHandler("ads", ads_db_command))
     app.add_handler(CommandHandler("shop", cmd_shop))
     app.add_handler(CommandHandler("agahi", cmd_agahi))
     app.add_handler(CommandHandler("wallet", cmd_wallet))

@@ -4,8 +4,20 @@ import os
 import random
 import logging
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaVideo
 from telegram.ext import ContextTypes
+
+
+def _account_media(ad):
+    """آلبوم عکس‌ها و فیلم اکانت را می‌سازد (برای ارسال به گروه، مثل کانال)."""
+    media = []
+    if ad.get('profile_photo'):
+        media.append(InputMediaPhoto(media=ad['profile_photo']))
+    if ad.get('games_photo'):
+        media.append(InputMediaPhoto(media=ad['games_photo']))
+    if ad.get('video'):
+        media.append(InputMediaVideo(media=ad['video']))
+    return media
 
 from ..config import *
 from ..state import *
@@ -783,23 +795,24 @@ async def process_payment_complete(update: Update, context: ContextTypes.DEFAULT
     admin_text = f"""🔔 آگهی جدید - نیاز به تایید
 
 🆔 شناسه: {agahi_id}
-👤 فروشنده: {update.effective_user.first_name}
-🆔 یوزرنیم: @{username if username else 'ندارد'}
-📞 شماره تماس: {profile.get('phone', '-')}
-🆔 آیدی پلاتو: {temp.get('platoid', '')}
+👤 فروشنده: {user_mention(user_id, update.effective_user.first_name)}
+🆔 آیدی عددی: <code>{user_id}</code>
+🆔 یوزرنیم: @{escape_html(username) if username else 'ندارد'}
+📞 شماره تماس: {escape_html(profile.get('phone', '-'))}
+🆔 آیدی پلاتو: {escape_html(temp.get('platoid', ''))}
 💰 مبلغ پرداختی: {total_fee:,} تومان
-💳 روش پرداخت: {payment_method}
+💳 روش پرداخت: {escape_html(payment_method)}
 
-⭐ ویپ: {temp.get('vip_count', '0')}
-📊 آیتم: {temp.get('item_count', '0')}
-🪙 سکه: {temp.get('coin_count', '0')}
-💰 پیپ: {temp.get('pip_count', '0')}
-🏆 وین: {temp.get('win_count', '0')}
-📅 سن: {temp.get('account_age', '0')}
-📝 توضیحات: {temp.get('seller_note', '')}
-💵 قیمت: {temp.get('price') if price_method == 'self' else 'تعیین توسط ادمین'}
+⭐ ویپ: {escape_html(temp.get('vip_count', '0'))}
+📊 آیتم: {escape_html(temp.get('item_count', '0'))}
+🪙 سکه: {escape_html(temp.get('coin_count', '0'))}
+💰 پیپ: {escape_html(temp.get('pip_count', '0'))}
+🏆 وین: {escape_html(temp.get('win_count', '0'))}
+📅 سن: {escape_html(temp.get('account_age', '0'))}
+📝 توضیحات: {escape_html(temp.get('seller_note', ''))}
+💵 قیمت: {escape_html(str(temp.get('price'))) if price_method == 'self' else 'تعیین توسط ادمین'}
 📢 انتشار: {'کانال بازی' if publish_method == 'game' else 'هر دو کانال'}"""
-    
+
     if price_method == 'admin':
         keyboard = [
             [InlineKeyboardButton("💰 تعیین قیمت و تایید", callback_data=f"set_price_{agahi_id}", style="success")],
@@ -811,17 +824,10 @@ async def process_payment_complete(update: Update, context: ContextTypes.DEFAULT
             [InlineKeyboardButton("❌ رد آگهی", callback_data=f"reject_ad_{agahi_id}", style="danger")]
         ]
     
-    # تعیین قیمت → گروه ۲ ، انتشار (قیمت مشخص) → گروه ۳
+    # عکس‌ها و فیلم اکانت به‌صورت آلبوم (مثل کانال، بدون برچسب)، بعد مشخصات و دکمه‌ها
     target = GROUP_ADS
-    # اول عکس‌ها و فیلم، بعد مشخصات و دکمه‌ها
-    if new_agahi.get('profile_photo'):
-        await send_to_target(context, target, photo=new_agahi['profile_photo'], caption="📸 عکس پروفایل اکانت")
-    if new_agahi.get('games_photo'):
-        await send_to_target(context, target, photo=new_agahi['games_photo'], caption="📸 عکس بازی ها و لول آپ")
-    if new_agahi.get('video'):
-        await send_to_target(context, target, video=new_agahi['video'], caption="🎥 فیلم آیتم های اکانت")
-
-    admin_msgs = await send_to_target(context, target, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await send_album_to_target(context, target, _account_media(new_agahi))
+    admin_msgs = await send_to_target(context, target, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     context.user_data[f'admin_msg_{agahi_id}'] = admin_msgs
 
     if update.callback_query:
@@ -892,23 +898,24 @@ async def process_payment_complete_with_receipt(update: Update, context: Context
     admin_text = f"""🔔 آگهی جدید - نیاز به تایید
 
 🆔 شناسه: {agahi_id}
-👤 فروشنده: {update.effective_user.first_name}
-🆔 یوزرنیم: @{username if username else 'ندارد'}
-📞 شماره تماس: {profile.get('phone', '-')}
-🆔 آیدی پلاتو: {temp.get('platoid', '')}
+👤 فروشنده: {user_mention(user_id, update.effective_user.first_name)}
+🆔 آیدی عددی: <code>{user_id}</code>
+🆔 یوزرنیم: @{escape_html(username) if username else 'ندارد'}
+📞 شماره تماس: {escape_html(profile.get('phone', '-'))}
+🆔 آیدی پلاتو: {escape_html(temp.get('platoid', ''))}
 💰 مبلغ پرداختی: {total_fee:,} تومان
-💳 روش پرداخت: {payment_method}
+💳 روش پرداخت: {escape_html(payment_method)}
 
-⭐ ویپ: {temp.get('vip_count', '0')}
-📊 آیتم: {temp.get('item_count', '0')}
-🪙 سکه: {temp.get('coin_count', '0')}
-💰 پیپ: {temp.get('pip_count', '0')}
-🏆 وین: {temp.get('win_count', '0')}
-📅 سن: {temp.get('account_age', '0')}
-📝 توضیحات: {temp.get('seller_note', '')}
-💵 قیمت: {temp.get('price') if price_method == 'self' else 'تعیین توسط ادمین'}
+⭐ ویپ: {escape_html(temp.get('vip_count', '0'))}
+📊 آیتم: {escape_html(temp.get('item_count', '0'))}
+🪙 سکه: {escape_html(temp.get('coin_count', '0'))}
+💰 پیپ: {escape_html(temp.get('pip_count', '0'))}
+🏆 وین: {escape_html(temp.get('win_count', '0'))}
+📅 سن: {escape_html(temp.get('account_age', '0'))}
+📝 توضیحات: {escape_html(temp.get('seller_note', ''))}
+💵 قیمت: {escape_html(str(temp.get('price'))) if price_method == 'self' else 'تعیین توسط ادمین'}
 📢 انتشار: {'کانال بازی' if publish_method == 'game' else 'هر دو کانال'}"""
-    
+
     if price_method == 'admin':
         keyboard = [
             [InlineKeyboardButton("💰 تعیین قیمت و تایید", callback_data=f"set_price_{agahi_id}", style="success")],
@@ -920,18 +927,10 @@ async def process_payment_complete_with_receipt(update: Update, context: Context
             [InlineKeyboardButton("❌ رد آگهی", callback_data=f"reject_ad_{agahi_id}", style="danger")]
         ]
     
-    # تعیین قیمت → گروه ۲ ، انتشار (قیمت مشخص) → گروه ۳
+    # عکس‌ها و فیلم اکانت به‌صورت آلبوم (مثل کانال)، بعد رسید + مشخصات + دکمه‌ها
     target = GROUP_ADS
-    # اول عکس‌ها و فیلم اکانت، بعد مشخصات و رسید و دکمه‌ها
-    if new_agahi.get('profile_photo'):
-        await send_to_target(context, target, photo=new_agahi['profile_photo'], caption="📸 عکس پروفایل اکانت")
-    if new_agahi.get('games_photo'):
-        await send_to_target(context, target, photo=new_agahi['games_photo'], caption="📸 عکس بازی ها و لول آپ")
-    if new_agahi.get('video'):
-        await send_to_target(context, target, video=new_agahi['video'], caption="🎥 فیلم آیتم های اکانت")
-
-    admin_msgs = await send_to_target(context, target, photo=receipt_photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard))
-
+    await send_album_to_target(context, target, _account_media(new_agahi))
+    admin_msgs = await send_to_target(context, target, photo=receipt_photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     context.user_data[f'admin_msg_{agahi_id}'] = admin_msgs
     
     await update.message.reply_text(f"✅ آگهی شما برای تایید به ادمین ارسال شد!\n🆔 شناسه: {agahi_id}\n💳 روش پرداخت: {payment_method}\n{SIGNATURE}")
@@ -1019,38 +1018,36 @@ async def process_price_only_request(update: Update, context: ContextTypes.DEFAU
     admin_text = f"""🔔 درخواست قیمت گذاری
 
 🆔 کد: {request_id}
-👤 فروشنده: {user_name}
-🆔 یوزرنیم: @{username if username else 'ندارد'}
-📞 شماره تماس: {profile.get('phone', '-')}
-🆔 آیدی پلاتو: {temp.get('platoid', '')}
-💳 روش پرداخت: {payment_method}
+👤 فروشنده: {user_mention(user_id, user_name)}
+🆔 آیدی عددی: <code>{user_id}</code>
+🆔 یوزرنیم: @{escape_html(username) if username else 'ندارد'}
+📞 شماره تماس: {escape_html(profile.get('phone', '-'))}
+🆔 آیدی پلاتو: {escape_html(temp.get('platoid', ''))}
+💳 روش پرداخت: {escape_html(payment_method)}
 
-⭐ ویپ: {temp.get('vip_count', '0')}
-📊 آیتم: {temp.get('item_count', '0')}
-🪙 سکه: {temp.get('coin_count', '0')}
-💰 پیپ: {temp.get('pip_count', '0')}
-🏆 وین: {temp.get('win_count', '0')}
-📅 سن: {temp.get('account_age', '0')}
+⭐ ویپ: {escape_html(temp.get('vip_count', '0'))}
+📊 آیتم: {escape_html(temp.get('item_count', '0'))}
+🪙 سکه: {escape_html(temp.get('coin_count', '0'))}
+💰 پیپ: {escape_html(temp.get('pip_count', '0'))}
+🏆 وین: {escape_html(temp.get('win_count', '0'))}
+📅 سن: {escape_html(temp.get('account_age', '0'))}
 
 📝 توضیحات:
-{temp.get('seller_note', '')}"""
+{escape_html(temp.get('seller_note', ''))}"""
 
     keyboard = [
         [InlineKeyboardButton("💰 ثبت قیمت", callback_data=f"price_set_{request_id}", style="success")],
         [InlineKeyboardButton("❌ رد درخواست", callback_data=f"reject_price_only_{request_id}", style="danger")]
     ]
-    
+
     try:
-        # سفارش تعیین قیمت اکانت → گروه ۲ ؛ اول عکس‌ها بعد مشخصات و دکمه‌ها
-        if temp.get('profile_photo'):
-            await send_to_target(context, GROUP_PRICING, photo=temp['profile_photo'], caption="📸 عکس پروفایل")
-        if temp.get('games_photo'):
-            await send_to_target(context, GROUP_PRICING, photo=temp['games_photo'], caption="📸 عکس بازی ها")
+        # سفارش تعیین قیمت اکانت → گروه ۲ ؛ عکس‌ها و فیلم به‌صورت آلبوم (مثل کانال)
+        await send_album_to_target(context, GROUP_PRICING, _account_media(temp))
 
         if receipt_photo:
-            admin_msgs = await send_to_target(context, GROUP_PRICING, photo=receipt_photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard))
+            admin_msgs = await send_to_target(context, GROUP_PRICING, photo=receipt_photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
         else:
-            admin_msgs = await send_to_target(context, GROUP_PRICING, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard))
+            admin_msgs = await send_to_target(context, GROUP_PRICING, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
         context.user_data[f'price_only_admin_msg_{request_id}'] = admin_msgs
         

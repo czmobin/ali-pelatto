@@ -143,6 +143,9 @@ async def start_with_ref(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     register_user(update.effective_user)
 
+    # با هر بار /start، همه‌ی مراحل/دکمه‌های ناتمام قبلی پاک می‌شوند تا کاربر گیر نکند
+    context.user_data.clear()
+
     if is_blacklisted(user_id):
         await update.message.reply_text("⛔ شما از دسترسی به ربات محروم شده اید!")
         return

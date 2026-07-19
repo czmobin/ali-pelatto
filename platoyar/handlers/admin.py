@@ -315,7 +315,44 @@ async def set_button_color(update: Update, context: ContextTypes.DEFAULT_TYPE, a
             await delete_admin_messages(context, admin_msg_id)
         except:
             pass
-    
+
+    # اگر قیمت را ادمین تعیین کرده، اول از کاربر تایید می‌گیریم؛ بعد منتشر می‌کنیم
+    if ad.get('price_method') == 'admin':
+        ad['button_color'] = color
+        ad['status'] = 'awaiting_user_confirm'
+        save_pending_ads(pending_ads)
+        price = ad.get('price')
+        price_disp = f"{price:,} تومان" if isinstance(price, int) else str(price)
+        try:
+            await context.bot.send_message(
+                chat_id=ad['user_id'],
+                text=(f"💰 قیمت آگهی شما توسط تیم پشتیبانی تعیین شد: <b>{price_disp}</b>\n\n"
+                      f"در صورت تایید شما و انتشار آگهی در چنل‌های ذکرشده، دکمه‌ی زیر را بزنید:\n{SIGNATURE}"),
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("تایید درخواست ✅", callback_data=f"confirm_publish_{ad_id}", style="success")]]),
+                parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"ارسال تایید قیمت به کاربر ناموفق: {e}")
+        await query.message.edit_text(
+            f"✅ قیمت {price_disp} ثبت شد و برای تایید نهایی به کاربر ارسال شد.\nپس از تایید کاربر، آگهی در چنل منتشر می‌شود.")
+        return
+
+    await publish_ad(update, context, ad_id, color)
+
+
+async def confirm_publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """کاربر قیمت تعیین‌شده توسط ادمین را تایید می‌کند → انتشار در چنل."""
+    query = update.callback_query
+    await query.answer()
+    ad_id = int(query.data.split("_")[2])
+    pending_ads = load_pending_ads()
+    ad = pending_ads.get(str(ad_id))
+    if not ad:
+        await query.message.edit_text("❌ این آگهی یافت نشد یا قبلاً منتشر شده است.")
+        return
+    if query.from_user.id != ad.get('user_id'):
+        return
+    color = ad.get('button_color', 'green')
+    await query.message.edit_text("✅ آگهی شما تایید شد و در حال انتشار در چنل است...")
     await publish_ad(update, context, ad_id, color)
 
 
@@ -633,12 +670,20 @@ async def process_reject_other_reason(update: Update, context: ContextTypes.DEFA
     await update.message.reply_text(f"✅ آگهی با دلیل '{reason}' رد شد.")
 
 
+async def _edit_or_reply(update, text):
+    """پیام تأیید را می‌فرستد؛ چه از دکمه آمده باشیم چه از پیام متنی."""
+    if update.callback_query:
+        await update.callback_query.message.edit_text(text)
+    elif update.message:
+        await update.message.reply_text(text)
+
+
 async def complete_ad_rejection(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, reason):
     pending_ads = load_pending_ads()
     ad = pending_ads.get(str(ad_id))
-    
+
     if not ad:
-        await update.callback_query.message.edit_text("❌ آگهی یافت نشد!")
+        await _edit_or_reply(update, "❌ آگهی یافت نشد!")
         return
     
     user_id = ad['user_id']
@@ -663,16 +708,16 @@ async def complete_ad_rejection(update: Update, context: ContextTypes.DEFAULT_TY
         chat_id=user_id,
         text=f"❌ آگهی شما رد شد.\n\n📝 دلیل: {reason}{wallet_msg}\n{SIGNATURE}"
     )
-    
-    await update.callback_query.message.edit_text(f"✅ آگهی {ad_id} با دلیل '{reason}' رد شد.")
+
+    await _edit_or_reply(update, f"✅ آگهی {ad_id} با دلیل '{reason}' رد شد.")
 
 
 async def complete_price_rejection(update: Update, context: ContextTypes.DEFAULT_TYPE, request_id, reason):
     price_requests = load_price_requests()
     req = price_requests.get(str(request_id))
-    
+
     if not req:
-        await update.callback_query.message.edit_text("❌ درخواست یافت نشد!")
+        await _edit_or_reply(update, "❌ درخواست یافت نشد!")
         return
     
     user_id = req['user_id']
@@ -692,7 +737,7 @@ async def complete_price_rejection(update: Update, context: ContextTypes.DEFAULT
     
     del price_requests[str(request_id)]
     save_price_requests(price_requests)
-    await update.callback_query.message.edit_text(f"✅ درخواست {request_id} با دلیل '{reason}' رد شد.")
+    await _edit_or_reply(update, f"✅ درخواست {request_id} با دلیل '{reason}' رد شد.")
 
 
 async def reject_price_only_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -762,3 +807,115 @@ async def process_reject_reason(update: Update, context: ContextTypes.DEFAULT_TY
     
     await update.message.reply_text(f"✅ آگهی {ad_id} با دلیل '{reason}' رد شد.")
     context.user_data['reject_ad_id'] = None
+
+
+# ============================================================
+# دستور /cash : افزایش/کاهش موجودی کاربر توسط ادمین
+#   /cash <آیدی عددی> +100000   → افزودن
+#   /cash <آیدی عددی> -100000   → کسر
+# ============================================================
+async def cash_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    args = context.args or []
+    if len(args) < 2:
+        await update.message.reply_text(
+            "فرمت درست:\n<code>/cash آیدی‌عددی +مبلغ</code>\nمثال: <code>/cash 777777777 +100000</code>",
+            parse_mode="HTML")
+        return
+    try:
+        uid = int(args[0])
+        amount = int(args[1].replace(",", "").replace("،", ""))
+    except ValueError:
+        await update.message.reply_text("❌ آیدی یا مبلغ نامعتبر است.")
+        return
+    if amount == 0:
+        await update.message.reply_text("❌ مبلغ نمی‌تواند صفر باشد.")
+        return
+
+    if amount > 0:
+        new_bal = add_to_wallet(uid, amount)
+        admin_txt = f"✅ مبلغ {amount:,} تومان به موجودی کاربر <code>{uid}</code> اضافه شد.\n💰 موجودی جدید: {new_bal:,} تومان"
+        user_txt = f"کاربر گرامی مبلغ {amount:,} تومان به موجودی شما توسط پشتیبانی ربات اضافه شد.\n{SIGNATURE}"
+    else:
+        ok, res = deduct_from_wallet(uid, -amount)
+        if not ok:
+            await update.message.reply_text(f"❌ موجودی کاربر کافی نیست. موجودی فعلی: {res:,} تومان")
+            return
+        admin_txt = f"✅ مبلغ {-amount:,} تومان از موجودی کاربر <code>{uid}</code> کسر شد.\n💰 موجودی جدید: {res:,} تومان"
+        user_txt = f"کاربر گرامی مبلغ {-amount:,} تومان از موجودی شما توسط پشتیبانی ربات کسر شد.\n{SIGNATURE}"
+
+    try:
+        await context.bot.send_message(chat_id=uid, text=user_txt)
+    except Exception as e:
+        admin_txt += f"\n⚠️ ارسال پیام به کاربر ناموفق بود: {e}"
+    await update.message.reply_text(admin_txt, parse_mode="HTML")
+
+
+# ============================================================
+# دستور /ad و /ads : دسترسی به اطلاعات آگهی‌های دیتابیس
+# ============================================================
+def _find_ad_anywhere(aid):
+    aid = str(aid)
+    pending = load_pending_ads()
+    if aid in pending:
+        return pending[aid], "⏳ در انتظار"
+    rejected = load_rejected_ads()
+    if aid in rejected:
+        return rejected[aid], "❌ ردشده"
+    agahi = load_agahi()
+    for uid, ads in agahi.items():
+        if isinstance(ads, list):
+            for a in ads:
+                if str(a.get("id")) == aid:
+                    return a, "✅ منتشرشده"
+    return None, None
+
+
+def _format_ad(ad, where):
+    price = ad.get("price")
+    price_disp = f"{price:,} تومان" if isinstance(price, int) else str(price)
+    uid = ad.get("user_id")
+    lines = [
+        f"📋 <b>آگهی {ad.get('id')}</b> ({where})",
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"👤 فروشنده: {user_mention(uid, ad.get('user_name'))}",
+        f"🆔 آیدی عددی: <code>{uid}</code>",
+        f"🆔 یوزرنیم: @{escape_html(ad.get('username')) if ad.get('username') else 'ندارد'}",
+        f"🆔 آیدی پلاتو: {escape_html(ad.get('platoid', '-'))}",
+        f"⭐ ویپ: {escape_html(ad.get('vip_count','-'))} | 📊 آیتم: {escape_html(ad.get('item_count','-'))}",
+        f"🪙 سکه: {escape_html(ad.get('coin_count','-'))} | 💰 پیپ: {escape_html(ad.get('pip_count','-'))}",
+        f"🏆 وین: {escape_html(ad.get('win_count','-'))} | 📅 سن: {escape_html(ad.get('account_age','-'))}",
+        f"💵 قیمت: {price_disp}",
+        f"📢 انتشار: {ad.get('publish_method','-')} | 🎨 رنگ: {ad.get('button_color','-')}",
+        f"📝 توضیحات: {escape_html(ad.get('seller_note',''))}",
+        f"📅 تاریخ: {ad.get('publish_date') or ad.get('date','-')}",
+    ]
+    if ad.get("reject_reason"):
+        lines.append(f"❌ دلیل رد: {escape_html(ad.get('reject_reason'))}")
+    return "\n".join(lines)
+
+
+async def ads_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    args = context.args or []
+    if args:
+        ad, where = _find_ad_anywhere(args[0])
+        if not ad:
+            await update.message.reply_text("❌ آگهی با این شناسه پیدا نشد.")
+            return
+        await update.message.reply_text(_format_ad(ad, where), parse_mode="HTML")
+        return
+    agahi = load_agahi()
+    pending = load_pending_ads()
+    rejected = load_rejected_ads()
+    total_pub = sum(len(v) for v in agahi.values() if isinstance(v, list))
+    await update.message.reply_text(
+        "🗂 <b>آگهی‌های دیتابیس</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ منتشرشده: <b>{total_pub}</b>\n"
+        f"⏳ در انتظار: <b>{len(pending)}</b>\n"
+        f"❌ ردشده: <b>{len(rejected)}</b>\n\n"
+        "برای دیدن یک آگهی خاص: <code>/ad شناسه</code>",
+        parse_mode="HTML")

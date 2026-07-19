@@ -54,6 +54,23 @@ async def send_to_target(context, target_chat, *, text=None, photo=None, video=N
         )
 
 
+def user_mention(user_id, name):
+    """لینک کلیک‌شونده به پیوی کاربر (حتی بدون یوزرنیم)."""
+    return f'<a href="tg://user?id={user_id}">{escape_html(name or "کاربر")}</a>'
+
+
+async def send_album_to_target(context, target_chat, media):
+    """ارسال آلبوم عکس/فیلم به گروه مقصد (یا پیوی ادمین‌ها اگر مقصد تنظیم نشده)."""
+    if not media:
+        return
+    targets = [target_chat] if target_chat else list(ADMIN_IDS)
+    for t in targets:
+        try:
+            await context.bot.send_media_group(chat_id=t, media=media)
+        except Exception as e:
+            logger.error(f"ارسال آلبوم به {t} ناموفق: {e}")
+
+
 async def delete_admin_messages(context, msg_ids):
     """حذف پیام‌های ارسال‌شده به ادمین‌ها. msg_ids می‌تواند دیکشنری {admin_id: message_id} یا یک message_id قدیمی باشد."""
     if not msg_ids:
