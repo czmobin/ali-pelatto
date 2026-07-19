@@ -664,10 +664,10 @@ async def process_reject_other_reason(update: Update, context: ContextTypes.DEFA
         await complete_ad_rejection(update, context, ad_id, reason)
     else:
         await complete_price_rejection(update, context, ad_id, reason)
-    
+
+    # پیام تأیید را خودِ complete_* می‌فرستد؛ اینجا دیگر تکرار نمی‌کنیم
     context.user_data['reject_other_ad_id'] = None
     context.user_data['reject_other_type'] = None
-    await update.message.reply_text(f"✅ آگهی با دلیل '{reason}' رد شد.")
 
 
 async def _edit_or_reply(update, text):
