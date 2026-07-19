@@ -442,12 +442,14 @@ async def process_discount_value(update: Update, context: ContextTypes.DEFAULT_T
     original_price = ad.get('price')
     
     profile = load_profiles().get(str(update.effective_user.id), {})
+    _u = update.effective_user
     admin_text = f"""🔔 درخواست تخفیف جدید از کاربر
 
 🆔 آگهی: {ad_id}
-👤 کاربر: {update.effective_user.first_name}
-🆔 یوزرنیم: @{update.effective_user.username if update.effective_user.username else 'ندارد'}
-📞 شماره تماس: {profile.get('phone', '-')}
+👤 کاربر: {user_mention(_u.id, _u.first_name)}
+🆔 آیدی عددی: <code>{_u.id}</code>
+🆔 یوزرنیم: @{escape_html(_u.username) if _u.username else 'ندارد'}
+📞 شماره تماس: {escape_html(profile.get('phone', '-'))}
 
 💰 قیمت اصلی: {original_price:,} تومان
 💰 قیمت فعلی: {current_price:,} تومان
@@ -456,13 +458,13 @@ async def process_discount_value(update: Update, context: ContextTypes.DEFAULT_T
 📊 تعداد تخفیف های قبلی: {context.user_data.get('discount_count', 0)}
 
 لطفاً تایید یا رد کنید:"""
-    
+
     keyboard = [
         [InlineKeyboardButton("✅ تایید تخفیف", callback_data=f"approve_discount_{ad_id}_{new_price}_{discount}", style="success")],
         [InlineKeyboardButton("❌ رد تخفیف", callback_data=f"reject_discount_{ad_id}", style="danger")]
     ]
-    
-    await send_to_target(context, GROUP_ADS, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    await send_to_target(context, GROUP_ADS, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     await update.message.reply_text(f"✅ درخواست تخفیف شما برای آگهی {ad_id} به ادمین ارسال شد.\nپس از تایید، تخفیف اعمال می شود.")
     
     context.user_data['waiting_discount_value'] = False

@@ -231,16 +231,17 @@ async def handle_buy_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     admin_text = f"""🔔 درخواست خرید جدید
 
 🆔 آگهی: {ad_id}
-👤 خریدار: {buyer_name}
-🆔 آیدی: {buyer_id}
-👤 فروشنده: {ad.get('user_name')}
+👤 خریدار: {user_mention(buyer_id, buyer_name)}
+🆔 آیدی عددی خریدار: <code>{buyer_id}</code>
+👤 فروشنده: {user_mention(ad.get('user_id'), ad.get('user_name'))}
+🆔 آیدی عددی فروشنده: <code>{ad.get('user_id')}</code>
 💵 مبلغ: {price_text}"""
-    
+
     keyboard = [
-        [InlineKeyboardButton("✅ تایید خرید", callback_data=f"confirm_sale_{ad_id}_{buyer_id}", style="success")], 
+        [InlineKeyboardButton("✅ تایید خرید", callback_data=f"confirm_sale_{ad_id}_{buyer_id}", style="success")],
         [InlineKeyboardButton("❌ رد خرید", callback_data=f"reject_sale_{ad_id}_{buyer_id}", style="danger")]
     ]
-    await send_to_target(context, GROUP_WALLET, photo=photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard))
+    await send_to_target(context, GROUP_WALLET, photo=photo, caption=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     await update.message.reply_text(f"✅ رسید شما به ادمین ارسال شد.\n🆔 شناسه خرید: {ad_id}\n\nپس از تایید، اکانت به شما تحویل داده می شود.\n{SIGNATURE}")
     context.user_data['waiting_buy_receipt'] = None
 

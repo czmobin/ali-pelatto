@@ -255,20 +255,20 @@ async def withdraw_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     profile = load_profiles().get(str(user_id), {})
     admin_text = f"""💰 درخواست برداشت از کیف پول
 
-👤 کاربر: {profile.get('name', '-')}
-🆔 آیدی: {user_id}
-📞 شماره تماس: {profile.get('phone', '-')}
-🏦 شماره کارت: {profile.get('card_number', '-')}
+👤 کاربر: {user_mention(user_id, profile.get('name'))}
+🆔 آیدی عددی: <code>{user_id}</code>
+📞 شماره تماس: {escape_html(profile.get('phone', '-'))}
+🏦 شماره کارت: {escape_html(profile.get('card_number', '-'))}
 💰 مبلغ درخواستی: {amount:,} تومان
 
 لطفاً اقدام به واریز کنید:"""
-    
+
     keyboard = [
         [InlineKeyboardButton("✅ تایید و پرداخت", callback_data=f"withdraw_approve_{user_id}_{amount}", style="success")],
         [InlineKeyboardButton("❌ رد", callback_data=f"withdraw_reject_{user_id}_{amount}", style="danger")]
     ]
-    
-    await send_to_target(context, GROUP_WALLET, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard))
+
+    await send_to_target(context, GROUP_WALLET, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     await query.message.edit_text("✅ درخواست برداشت شما به ادمین ارسال شد.\n📌 پس از تایید، مبلغ به حساب شما واریز می شود.")
     context.user_data['withdraw_amount'] = None
 
