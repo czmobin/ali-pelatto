@@ -13,10 +13,26 @@ from .adminpanel import *
 from .shop import *
 
 
+_ACTION_PREFIXES = (
+    "set_price_", "select_color_", "color_green_", "color_red_", "color_blue_",
+    "reject_ad_", "reject_fake_", "reject_info_", "reject_violation_", "reject_other_",
+    "price_set_", "reject_price_only_", "confirm_charge_", "reject_charge_",
+    "withdraw_approve_", "withdraw_reject_", "confirm_sale_", "reject_sale_",
+    "approve_discount_", "reject_discount_", "confirm_publish_",
+)
+
+
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
-    
+
+    # بعد از هر اقدام ادمین (تأیید/رد/قیمت/رنگ/...) دکمه‌های همان پیام حذف می‌شوند تا دوباره زده نشوند
+    if any(data.startswith(p) for p in _ACTION_PREFIXES):
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+
     # اولویت ۱: ثبت قیمت
     if data.startswith("price_set_"):
         await price_set_handler(update, context)
