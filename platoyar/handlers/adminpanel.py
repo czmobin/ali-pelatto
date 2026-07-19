@@ -69,9 +69,10 @@ def _panel_keyboard(update=None):
         [InlineKeyboardButton("📢 پیام همگانی", callback_data="ap_broadcast"),
          InlineKeyboardButton("✉️ پیام به یک کاربر", callback_data="ap_sendone")],
     ]
-    # فقط سوپرادمین دکمه‌ی مدیریت ادمین‌ها را می‌بیند
+    # فقط سوپرادمین دکمه‌های مدیریت ادمین و دیتابیس را می‌بیند
     if update is not None and update.effective_user and update.effective_user.id == SUPER_ADMIN_ID:
-        rows.append([InlineKeyboardButton("👮 مدیریت ادمین‌ها", callback_data="ap_admins")])
+        rows.append([InlineKeyboardButton("👮 مدیریت ادمین‌ها", callback_data="ap_admins"),
+                     InlineKeyboardButton("🗄 دیتابیس", callback_data="ap_db")])
     rows.append([InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")])
     return rows
 
@@ -381,3 +382,69 @@ async def ap_admin_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remove_admin(uid)
     await update.callback_query.answer("حذف شد")
     await ap_admins(update, context)
+
+
+# ---- دسترسی کامل به دیتابیس (فقط سوپرادمین) ----
+async def ap_db(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        return
+    from ..db import kv_keys, kv_get
+    keys = kv_keys()
+    lines = ["🗄 <b>دیتابیس (SQLite)</b>", "━━━━━━━━━━━━━━━━━━━━"]
+    rows = []
+    for k in keys:
+        raw = kv_get(k)
+        try:
+            obj = json.loads(raw) if raw else None
+            cnt = len(obj) if hasattr(obj, "__len__") else "-"
+        except Exception:
+            cnt = "?"
+        lines.append(f"• <code>{k}</code> : {cnt}")
+        rows.append([InlineKeyboardButton(f"👁 {k}", callback_data=f"ap_dbview_{k}")])
+    if not keys:
+        lines.append("خالی است.")
+    rows.append([InlineKeyboardButton("📥 دانلود فایل کامل دیتابیس", callback_data="ap_dbdownload")])
+    rows.append([InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")])
+    await _show(update, "\n".join(lines), rows)
+
+
+async def ap_db_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        await update.callback_query.answer()
+        return
+    from ..db import kv_get
+    await update.callback_query.answer()
+    key = update.callback_query.data[len("ap_dbview_"):]
+    raw = kv_get(key)
+    if raw is None:
+        await update.callback_query.message.reply_text("خالی است.")
+        return
+    try:
+        raw = json.dumps(json.loads(raw), ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    if len(raw) <= 3500:
+        await update.callback_query.message.reply_text(
+            f"🗄 <b>{key}</b>\n<pre>{escape_html(raw)}</pre>", parse_mode="HTML")
+    else:
+        import io
+        bio = io.BytesIO(raw.encode("utf-8"))
+        bio.name = key
+        await context.bot.send_document(chat_id=update.effective_user.id, document=bio,
+                                        filename=key, caption=f"🗄 {key}")
+
+
+async def ap_db_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        await update.callback_query.answer()
+        return
+    from ..db import DB_PATH, get_conn
+    await update.callback_query.answer("در حال ارسال فایل دیتابیس...")
+    try:
+        get_conn().commit()
+        with open(DB_PATH, "rb") as f:
+            await context.bot.send_document(chat_id=update.effective_user.id, document=f,
+                                            filename="platoyar.sqlite",
+                                            caption="🗄 فایل کامل دیتابیس (SQLite)")
+    except Exception as e:
+        await update.callback_query.message.reply_text(f"❌ خطا در ارسال فایل: {e}")

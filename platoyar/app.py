@@ -17,8 +17,9 @@ from .config import (
     TOKEN, ADMIN_IDS, PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
     BLACKLIST_FILE, WALLET_FILE, REJECT_COUNTER_FILE, PRICE_REQUEST_FILE,
     REJECTED_ADS_FILE, DISCOUNT_REQUEST_FILE, REFERRAL_FILE, USERS_FILE,
-    SHOP_PRICES_FILE,
+    SHOP_PRICES_FILE, SHOP_UNAVAILABLE_FILE, ADMINS_FILE,
 )
+from .db import migrate_json_files
 from .handlers.router import handle_callbacks, handle_message
 from .handlers.menu import start, chat_id_command
 from .handlers.admin import search_admin_command, cash_command, ads_db_command
@@ -59,27 +60,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _init_data_files():
-    files = [PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
-             BLACKLIST_FILE, WALLET_FILE, REJECT_COUNTER_FILE,
-             PRICE_REQUEST_FILE, REJECTED_ADS_FILE, DISCOUNT_REQUEST_FILE,
-             REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE]
-    for file in files:
-        if not os.path.exists(file):
-            try:
-                with open(file, "w", encoding="utf-8") as f:
-                    if file == COUNTER_FILE:
-                        json.dump({"last_id": 0}, f)
-                    elif file == BLACKLIST_FILE:
-                        json.dump([], f)
-                    else:
-                        json.dump({}, f)
-            except Exception:
-                pass
+_DATA_FILES = [PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
+               BLACKLIST_FILE, WALLET_FILE, REJECT_COUNTER_FILE,
+               PRICE_REQUEST_FILE, REJECTED_ADS_FILE, DISCOUNT_REQUEST_FILE,
+               REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE,
+               SHOP_UNAVAILABLE_FILE]
+# نکته: ADMINS_FILE عمداً منتقل نمی‌شود و به‌صورت فایل می‌ماند (بوت‌استرپ config)
 
 
 def main():
-    _init_data_files()
+    # داده‌ی JSON قبلی (اگر باشد) یک‌بار به SQLite منتقل می‌شود
+    migrate_json_files(_DATA_FILES)
 
     app = Application.builder().token(TOKEN).post_init(_post_init).build()
     app.add_handler(CommandHandler("start", start))

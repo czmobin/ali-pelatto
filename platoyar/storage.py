@@ -1,6 +1,7 @@
 # ============================================================
-# لایه‌ی ذخیره‌سازی (JSON روی دیسک)
-# همه‌ی خواندن/نوشتن‌ها از دو تابع عمومی _read_json / _write_json می‌گذرند.
+# لایه‌ی ذخیره‌سازی (SQLite)
+# همه‌ی خواندن/نوشتن‌ها از دو تابع عمومی _read_json / _write_json می‌گذرند که حالا
+# داده را به‌جای فایل، داخل SQLite (جدول kv، با کلیدِ نام فایل) ذخیره می‌کنند.
 # ============================================================
 import json
 import os
@@ -11,22 +12,29 @@ from .config import (
     REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE, SHOP_UNAVAILABLE_FILE,
     ADMINS_FILE, ADMIN_IDS, SUPER_ADMIN_ID,
 )
+from .db import kv_get, kv_set
+
+
+def _key(path):
+    # کلید دیتابیس = نام فایل (مثل wallet.json) تا مستقل از مسیر داده باشد
+    return os.path.basename(path)
 
 
 def _read_json(path, default):
-    """خواندن امن JSON؛ در صورت نبود فایل یا خطا، مقدار پیش‌فرض برمی‌گردد."""
+    """خواندن امن از دیتابیس؛ در صورت نبود یا خطا، مقدار پیش‌فرض برمی‌گردد."""
+    raw = kv_get(_key(path))
+    if raw is None:
+        return default() if callable(default) else default
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+        return json.loads(raw)
     except Exception:
         return default() if callable(default) else default
 
 
 def _write_json(path, data):
-    """نوشتن امن JSON."""
+    """نوشتن امن در دیتابیس."""
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        kv_set(_key(path), json.dumps(data, ensure_ascii=False))
     except Exception:
         pass
 
@@ -67,16 +75,10 @@ def deduct_from_wallet(user_id, amount):
 # ---- شمارنده‌ی شناسه‌ی آگهی ----
 def get_next_ad_id():
     try:
-        if not os.path.exists(COUNTER_FILE):
-            with open(COUNTER_FILE, "w") as f:
-                json.dump({"last_id": 0}, f)
-            return 0
-        with open(COUNTER_FILE, "r") as f:
-            data = json.load(f)
-            last_id = data.get("last_id", -1) + 1
-            data["last_id"] = last_id
-        with open(COUNTER_FILE, "w") as f:
-            json.dump(data, f)
+        data = _read_json(COUNTER_FILE, dict)
+        last_id = data.get("last_id", -1) + 1
+        data["last_id"] = last_id
+        _write_json(COUNTER_FILE, data)
         return last_id
     except Exception:
         return 0
@@ -242,8 +244,14 @@ def save_shop_unavailable(data):
 
 
 # ---- مدیریت ادمین‌ها (زمان اجرا) ----
+# ادمین‌ها در یک فایل JSON ساده می‌مانند (نه SQLite) چون config در زمان import
+# قبل از آماده‌شدن دیتابیس، آن‌ها را می‌خواند.
 def _save_admins():
-    _write_json(ADMINS_FILE, ADMIN_IDS)
+    try:
+        with open(ADMINS_FILE, "w", encoding="utf-8") as f:
+            json.dump(ADMIN_IDS, f, ensure_ascii=False)
+    except Exception:
+        pass
 
 
 def add_admin(uid):

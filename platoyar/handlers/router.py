@@ -108,6 +108,15 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("ap_admindel_"):
         await ap_admin_remove(update, context)
         return
+    if data == "ap_db":
+        await ap_db(update, context)
+        return
+    if data == "ap_dbdownload":
+        await ap_db_download(update, context)
+        return
+    if data.startswith("ap_dbview_"):
+        await ap_db_view(update, context)
+        return
 
     # بقیه دکمه‌ها
     if data == "back_to_main":
