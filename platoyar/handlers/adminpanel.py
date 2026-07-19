@@ -139,12 +139,14 @@ async def ap_users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = load_users()
     # جدیدترین‌ها بر اساس ترتیب درج (آخرین کلیدها) — دیکشنری پایتون ترتیب درج را حفظ می‌کند
     items = list(users.values())[-25:][::-1]
-    lines = ["👥 <b>۲۵ کاربر اخیر</b>", "━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["👥 <b>۲۵ کاربر اخیر</b>", "━━━━━━━━━━━━━━━━━━━━",
+             "روی نام کاربر بزنید تا پیویش باز شود 👇", ""]
     for rec in items:
+        uid = rec.get('id')
         uname = f"@{rec['username']}" if rec.get("username") else "—"
         lines.append(
-            f"🆔 <code>{rec.get('id')}</code> | {escape_html(rec.get('first_name',''))} | {uname}\n"
-            f"   📅 {rec.get('first_seen','-')}"
+            f"👤 {user_mention(uid, rec.get('first_name'))} | {uname}\n"
+            f"   🆔 <code>{uid}</code> | 📅 {rec.get('first_seen','-')}"
         )
     if len(items) == 0:
         lines.append("هنوز کاربری ثبت نشده.")
@@ -176,6 +178,7 @@ def _user_info_text(uid):
     lines = [
         f"👤 <b>اطلاعات کاربر</b> <code>{uid}</code>",
         "━━━━━━━━━━━━━━━━━━━━",
+        f"باز کردن پیوی: {user_mention(uid, rec.get('first_name') or 'کاربر')} 👈",
         f"نام تلگرام: {escape_html(rec.get('first_name','-'))}",
         f"یوزرنیم: @{rec['username']}" if rec.get("username") else "یوزرنیم: —",
         f"اولین بازدید: {rec.get('first_seen','-')}",
