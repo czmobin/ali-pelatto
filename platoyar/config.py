@@ -65,14 +65,14 @@ def _int_or_none(v):
     except (TypeError, ValueError):
         return None
 
-# گروهِ «ثبت آگهی و قیمت‌گذاری» (گروه ۲) — همه‌ی آگهی‌ها + قیمت‌گذاری + شارژ کیف پول اینجا می‌آید.
-# گروه ۱ قبلی (-1004317332470) دیگر استفاده نمی‌شود.
-GROUP_ADS = _int_or_none(os.environ.get("GROUP_ADS", "-1004362886632")) or None
-GROUP_PRICING = _int_or_none(os.environ.get("GROUP_PRICING", "-1004362886632")) or None
-# گروه ۳: شارژ کیف پول + خرید اکانت + رسید تراکنش + برداشت
-GROUP_WALLET = _int_or_none(os.environ.get("GROUP_WALLET", "-1004483394723")) or None
-# گروه فروشگاه: همه‌ی سفارش‌های فروشگاه (پلاتو، کالاف، استارز، پرمیوم و ...)
-GROUP_SHOP = _int_or_none(os.environ.get("GROUP_SHOP", "-1003729150291")) or None
+# همه‌چیز در یک گروه: «گروه ادمینی سفارشات ربات پلاتویار» (-1003729150291).
+# آگهی، قیمت‌گذاری، شارژ، برداشت، خرید اکانت، تراکنش، تخفیف و سفارش‌های فروشگاه — همه اینجا می‌آید.
+# گروه‌های ۱ و ۲ و ۳ قبلی دیگر استفاده نمی‌شوند.
+_ADMIN_GROUP = "-1003729150291"
+GROUP_ADS = _int_or_none(os.environ.get("GROUP_ADS", _ADMIN_GROUP)) or None
+GROUP_PRICING = _int_or_none(os.environ.get("GROUP_PRICING", _ADMIN_GROUP)) or None
+GROUP_WALLET = _int_or_none(os.environ.get("GROUP_WALLET", _ADMIN_GROUP)) or None
+GROUP_SHOP = _int_or_none(os.environ.get("GROUP_SHOP", _ADMIN_GROUP)) or None
 
 # ---- مسیر داده‌ها ----
 # پیش‌فرض: پوشه‌ی data کنار همین پکیج. با BOT_DATA_FOLDER قابل override است.
