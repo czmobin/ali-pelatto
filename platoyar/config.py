@@ -97,6 +97,7 @@ USERS_FILE = os.path.join(DATA_FOLDER, "users.json")  # ثبت همه‌ی کا�
 SHOP_PRICES_FILE = os.path.join(DATA_FOLDER, "shop_prices.json")  # قیمت آیتم‌های فروشگاه (قابل ویرایش ادمین)
 SHOP_UNAVAILABLE_FILE = os.path.join(DATA_FOLDER, "shop_unavailable.json")  # لیست بخش‌های ناموجود فروشگاه
 ADMINS_FILE = os.path.join(DATA_FOLDER, "admins.json")  # ادمین‌های اضافه‌شده در زمان اجرا
+SHOP_ORDERS_FILE = os.path.join(DATA_FOLDER, "shop_orders.json")  # سفارش‌های فروشگاه
 
 # ادمین‌های ذخیره‌شده در فایل را به لیست زنده اضافه کن (بدون ساختن شیء جدید)
 try:

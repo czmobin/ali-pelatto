@@ -263,18 +263,41 @@ async def shop_toggle_avail(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 # ثبت سفارش عادی (با گرفتن اطلاعات لازم)
 # ============================================================
-async def _send_order(context, user, item_label, extra=None, photo=None):
+async def _create_and_send_order(context, user, item_label, extra=None, photo=None, price=None, method=None):
+    """سفارش را ذخیره می‌کند و با دکمه‌های «انجام شد / رد» به گروه فروشگاه می‌فرستد."""
+    oid = get_next_ad_id()
+    orders = load_shop_orders()
+    orders[str(oid)] = {
+        "id": oid, "user_id": user.id, "user_name": user.first_name or "",
+        "username": user.username or "", "item": item_label,
+        "price": price, "method": method, "info": extra or "",
+        "status": "pending", "date": now_jalali(),
+    }
+    save_shop_orders(orders)
+
     uname = f"@{user.username}" if user.username else "—"
-    caption = (f"🛒 <b>سفارش جدید فروشگاه</b>\n\n"
-               f"📦 {escape_html(item_label)}\n"
-               f"👤 {escape_html(user.first_name or '')} ({uname})\n"
-               f"🆔 <code>{user.id}</code>")
+    caption = f"🛒 <b>سفارش فروشگاه</b> — کد <code>{oid}</code>\n\n📦 {escape_html(item_label)}\n"
     if extra:
-        caption += f"\n\n{extra}"
+        caption += f"{extra}\n"
+    caption += f"👤 {user_mention(user.id, user.first_name)}\n🆔 <code>{user.id}</code> ({uname})"
+    if price:
+        caption += f"\n💵 مبلغ: {price:,} تومان"
+    if method:
+        caption += f"\n💳 روش: {escape_html(method)}"
+
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ سفارش انجام شد", callback_data=f"shoporder_done_{oid}", style="success"),
+        InlineKeyboardButton("❌ رد سفارش", callback_data=f"shoporder_reject_{oid}", style="danger"),
+    ]])
     if photo:
-        await send_to_target(context, GROUP_SHOP, photo=photo, caption=caption, parse_mode="HTML")
+        await send_to_target(context, GROUP_SHOP, photo=photo, caption=caption, reply_markup=kb, parse_mode="HTML")
     else:
-        await send_to_target(context, GROUP_SHOP, text=caption, parse_mode="HTML")
+        await send_to_target(context, GROUP_SHOP, text=caption, reply_markup=kb, parse_mode="HTML")
+    return oid
+
+
+async def _send_order(context, user, item_label, extra=None, photo=None):
+    return await _create_and_send_order(context, user, item_label, extra=extra, photo=photo)
 
 
 async def _after_info(update, context, nid, info_lines, item_photo):
@@ -456,21 +479,76 @@ async def shop_receive_payment_receipt(update: Update, context: ContextTypes.DEF
 
 
 async def _finalize_paid_order(context, user, pend, receipt_photo):
-    uname = f"@{user.username}" if user.username else "—"
-    text = (f"🛒 <b>سفارش فروشگاه (پرداخت‌شده)</b>\n\n"
-            f"📦 {escape_html(pend['label'])}\n"
-            f"{pend['info']}\n"
-            f"💵 مبلغ: {pend['price']:,} تومان\n"
-            f"💳 روش پرداخت: {pend.get('method', '-')}\n"
-            f"👤 {escape_html(user.first_name or '')} ({uname})\n🆔 <code>{user.id}</code>")
-    if pend.get("item_photo"):
-        await send_to_target(context, GROUP_SHOP, photo=pend["item_photo"], caption=text, parse_mode="HTML")
-    else:
-        await send_to_target(context, GROUP_SHOP, text=text, parse_mode="HTML")
+    oid = await _create_and_send_order(
+        context, user, pend["label"], extra=pend.get("info"),
+        photo=pend.get("item_photo"), price=pend.get("price"), method=pend.get("method"))
+    # رسید پرداخت به‌عنوان پیام بعدی
     await send_to_target(
         context, GROUP_SHOP, photo=receipt_photo,
-        caption=f"🧾 رسید پرداخت سفارش «{escape_html(pend['label'])}» — کاربر <code>{user.id}</code>",
+        caption=f"🧾 رسید پرداخت سفارش کد <code>{oid}</code> — کاربر <code>{user.id}</code>",
         parse_mode="HTML")
+
+
+# ============================================================
+# مدیریت سفارش‌ها توسط ادمین (انجام شد / رد)
+# ============================================================
+async def shop_order_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not _is_admin(update):
+        await query.answer()
+        return
+    oid = query.data.rsplit("_", 1)[1]
+    orders = load_shop_orders()
+    o = orders.get(oid)
+    if not o:
+        await query.answer("سفارش یافت نشد")
+        return
+    o["status"] = "done"
+    save_shop_orders(orders)
+    await query.answer("✅ انجام شد")
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    try:
+        await context.bot.send_message(
+            chat_id=o["user_id"],
+            text=f"✅ سفارش شما انجام شد:\n📦 {o['item']}\n{SHOP_SIGNATURE}", parse_mode="HTML")
+    except Exception:
+        pass
+    await query.message.reply_text(f"✅ سفارش کد {oid} انجام شد و به مشتری اطلاع داده شد.")
+
+
+async def shop_order_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not _is_admin(update):
+        await query.answer()
+        return
+    oid = query.data.rsplit("_", 1)[1]
+    await query.answer()
+    context.user_data["shop_order_reject_id"] = oid
+    await query.message.reply_text(f"❌ دلیل رد سفارش کد {oid} را بنویسید:")
+
+
+async def shop_order_reject_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    oid = context.user_data.pop("shop_order_reject_id", None)
+    if not oid:
+        return
+    reason = (update.message.text or "").strip() or "-"
+    orders = load_shop_orders()
+    o = orders.get(oid)
+    if o:
+        o["status"] = "rejected"
+        o["reject_reason"] = reason
+        save_shop_orders(orders)
+        try:
+            await context.bot.send_message(
+                chat_id=o["user_id"],
+                text=f"❌ سفارش شما رد شد:\n📦 {o['item']}\n📝 دلیل: {reason}\n{SHOP_SIGNATURE}",
+                parse_mode="HTML")
+        except Exception:
+            pass
+    await update.message.reply_text(f"✅ سفارش کد {oid} رد شد و به مشتری اطلاع داده شد.")
 
 
 # ============================================================

@@ -569,8 +569,8 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
         if publish_method == 'both':
             channels_text += f"\n📢 کانال فروشگاهی: {MAIN_CHANNEL_LINK}"
         
-        await context.bot.send_message(chat_id=ad['user_id'], text=f"✅ آگهی شما منتشر شد!\n\n{channels_text}\n💰 قیمت: {price_display}\n{SIGNATURE}")
-        await send_to_target(context, GROUP_ADS, text=f"✅ آگهی {ad_id} با قیمت {price_display} منتشر شد!")
+        await context.bot.send_message(chat_id=ad['user_id'], text=f"✅ آگهی شما منتشر شد!\n\n{channels_text}\n💰 قیمت: {price_display}\n{SIGNATURE}", parse_mode="HTML")
+        await send_to_target(context, GROUP_ADS, text=f"✅ آگهی {ad_id} با قیمت {price_display} منتشر شد!", parse_mode="HTML")
         
         if update.callback_query:
             await update.callback_query.message.edit_text(f"✅ آگهی {ad_id} با موفقیت منتشر شد!")

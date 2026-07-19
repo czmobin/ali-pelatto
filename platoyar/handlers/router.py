@@ -73,6 +73,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("shopavail:"):
         await shop_toggle_avail(update, context)
         return
+    if data.startswith("shoporder_done_"):
+        await shop_order_done(update, context)
+        return
+    if data.startswith("shoporder_reject_"):
+        await shop_order_reject(update, context)
+        return
 
     # پنل مدیریت کاربران
     if data == "admin_panel":
@@ -244,6 +250,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---- فروشگاه ----
+    if context.user_data.get('shop_order_reject_id'):
+        await shop_order_reject_process(update, context)
+        return
     if context.user_data.get('shop_pending'):
         await shop_receive_payment_receipt(update, context)
         return
@@ -363,5 +372,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.args = [parts[1]]
             await search_admin_command(update, context)
             return
-        else:
+        elif text.startswith('/cash'):
+            context.args = text.split()[1:]
+            await cash_command(update, context)
+            return
+        elif text.startswith('/ads') or text.startswith('/ad'):
+            context.args = text.split()[1:]
+            await ads_db_command(update, context)
+            return
+        # فقط در چت خصوصی «دستور ناشناخته» می‌گوییم؛ در گروه‌ها سکوت (تا اسپم نشود)
+        elif update.effective_chat and update.effective_chat.type == "private":
             await update.message.reply_text("❓ دستور ناشناخته!\nاز /start استفاده کنید.")

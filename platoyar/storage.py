@@ -10,7 +10,7 @@ from .config import (
     WALLET_FILE, PROFILE_FILE, AGAHI_FILE, PENDING_ADS_FILE, COUNTER_FILE,
     BLACKLIST_FILE, REJECT_COUNTER_FILE, PRICE_REQUEST_FILE, REJECTED_ADS_FILE,
     REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE, SHOP_UNAVAILABLE_FILE,
-    ADMINS_FILE, ADMIN_IDS, SUPER_ADMIN_ID,
+    ADMINS_FILE, ADMIN_IDS, SUPER_ADMIN_ID, SHOP_ORDERS_FILE,
 )
 from .db import kv_get, kv_set
 
@@ -231,6 +231,15 @@ def load_shop_prices():
 
 def save_shop_prices(data):
     _write_json(SHOP_PRICES_FILE, data)
+
+
+# ---- سفارش‌های فروشگاه ----
+def load_shop_orders():
+    return _read_json(SHOP_ORDERS_FILE, dict)
+
+
+def save_shop_orders(data):
+    _write_json(SHOP_ORDERS_FILE, data)
 
 
 # ---- بخش‌های ناموجود فروشگاه ----
