@@ -513,7 +513,7 @@ async def shop_order_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await context.bot.send_message(
             chat_id=o["user_id"],
-            text=f"✅ سفارش شما انجام شد:\n📦 {o['item']}\n{SHOP_SIGNATURE}", parse_mode="HTML")
+            text=f"✅ سفارش «{o['item']}» شما با موفقیت انجام شد.\n{SHOP_SIGNATURE}", parse_mode="HTML")
     except Exception:
         pass
     await query.message.reply_text(f"✅ سفارش کد {oid} انجام شد و به مشتری اطلاع داده شد.")
@@ -544,7 +544,7 @@ async def shop_order_reject_process(update: Update, context: ContextTypes.DEFAUL
         try:
             await context.bot.send_message(
                 chat_id=o["user_id"],
-                text=f"❌ سفارش شما رد شد:\n📦 {o['item']}\n📝 دلیل: {reason}\n{SHOP_SIGNATURE}",
+                text=f"❌ سفارش «{o['item']}» شما رد شد.\n📝 دلیل: {escape_html(reason)}\n{SHOP_SIGNATURE}",
                 parse_mode="HTML")
         except Exception:
             pass
