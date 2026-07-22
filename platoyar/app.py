@@ -72,7 +72,19 @@ def main():
     # داده‌ی JSON قبلی (اگر باشد) یک‌بار به SQLite منتقل می‌شود
     migrate_json_files(_DATA_FILES)
 
-    app = Application.builder().token(TOKEN).post_init(_post_init).build()
+    app = (
+        Application.builder()
+        .token(TOKEN)
+        .post_init(_post_init)
+        .connect_timeout(30)
+        .read_timeout(30)
+        .write_timeout(30)
+        .pool_timeout(30)
+        .get_updates_connect_timeout(30)
+        .get_updates_read_timeout(30)
+        .get_updates_pool_timeout(30)
+        .build()
+    )
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("searchadmin", search_admin_command))
     app.add_handler(CommandHandler("id", chat_id_command))
