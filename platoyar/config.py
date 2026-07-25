@@ -29,12 +29,14 @@ ADMIN_IDS = [7528842090, 127679626, 1301523142]
 ADMIN_USERNAME = "@PLATOYAR2"
 ADMIN_PHONE = "09919173528"
 SUPPORT_CHANNEL = "@PLATOYARSHOP_bot"
+BOT_USERNAME = "@PLATOYARSHOP_bot"  # آیدی خود ربات
 
 # ---- امضا ----
 SIGNATURE = f"""
 ━━━━━━━━━━━━━━━━━━━━
 👤 ایدی ادمین: {ADMIN_USERNAME}
 📢 کانال ما: @platoyar_iD
+🤖 ربات: {BOT_USERNAME}
 ━━━━━━━━━━━━━━━━━━━━"""
 
 # ---- امضای مخصوص فروشگاه ----
