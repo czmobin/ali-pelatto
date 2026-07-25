@@ -68,6 +68,7 @@ def _panel_keyboard(update=None):
          InlineKeyboardButton("🔎 سرچ آگهی", callback_data="ap_adsearch")],
         [InlineKeyboardButton("📢 پیام همگانی", callback_data="ap_broadcast"),
          InlineKeyboardButton("✉️ پیام به یک کاربر", callback_data="ap_sendone")],
+        [InlineKeyboardButton("✏️ ویرایش آگهی", callback_data="ap_editad")],
     ]
     # فقط سوپرادمین دکمه‌های مدیریت ادمین و دیتابیس را می‌بیند
     if update is not None and update.effective_user and update.effective_user.id == SUPER_ADMIN_ID:
@@ -85,7 +86,8 @@ def _back_kb():
 def _clear_ap_flags(context):
     for k in ("ap_waiting_user_id", "ap_waiting_broadcast",
               "ap_waiting_sendone_id", "ap_waiting_sendone_text", "ap_waiting_adsearch",
-              "ap_waiting_admin_id", "ap_waiting_setting"):
+              "ap_waiting_admin_id", "ap_waiting_setting",
+              "ap_waiting_editad_id", "ap_editad"):
         context.user_data.pop(k, None)
 
 

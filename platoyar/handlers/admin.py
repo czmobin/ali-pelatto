@@ -1034,3 +1034,193 @@ async def ads_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"❌ ردشده: <b>{len(rejected)}</b>\n\n"
         "برای دیدن یک آگهی خاص: <code>/ad شناسه</code>",
         parse_mode="HTML")
+
+
+# ============================================================
+# ویرایش آگهی‌های کاربران توسط ادمین (متن/قیمت/مشخصات + آپدیت چنل)
+# ============================================================
+_AD_EDIT_FIELDS = [
+    ("seller_note", "📝 توضیحات"),
+    ("price", "💵 قیمت"),
+    ("vip_count", "⭐ ویپ"),
+    ("item_count", "📊 آیتم"),
+    ("coin_count", "🪙 سکه"),
+    ("pip_count", "💰 پیپ"),
+    ("win_count", "🏆 وین"),
+    ("account_age", "📅 سن اکانت"),
+]
+
+
+def _find_ad_editable(ad_id):
+    """آگهی را در pending یا agahi پیدا می‌کند. خروجی: (ad, kind, container)"""
+    pending = load_pending_ads()
+    if str(ad_id) in pending:
+        return pending[str(ad_id)], 'pending', pending
+    agahi = load_agahi()
+    for uid, ads in agahi.items():
+        if isinstance(ads, list):
+            for a in ads:
+                if a.get('id') == ad_id:
+                    return a, 'agahi', agahi
+    return None, None, None
+
+
+def _ad_effective_price(ad):
+    price = ad.get('price')
+    if ad.get('discount_history'):
+        for disc in reversed(ad['discount_history']):
+            if disc.get('is_active', True):
+                return disc.get('new_price', price)
+    return price
+
+
+def _ad_post_text(ad):
+    price_value = _ad_effective_price(ad)
+    price_display = f"<b>{price_value:,}</b> تومان" if isinstance(price_value, int) else str(price_value)
+    seller_note = escape_html(ad.get('seller_note', '-'))
+    return f"""🎮 <b>آگهی فروش اکانت پلاتو</b>
+
+🆔 شناسه: {ad.get('id')}
+
+⭐ ویپ: {escape_html(str(ad.get('vip_count', '-')))}
+📊 آیتم: {escape_html(str(ad.get('item_count', '-')))}
+🪙 سکه: {escape_html(str(ad.get('coin_count', '-')))}
+💰 پیپ: {escape_html(str(ad.get('pip_count', '-')))}
+🏆 وین: {escape_html(str(ad.get('win_count', '-')))}
+📅 سن اکانت: {escape_html(str(ad.get('account_age', '-')))}
+💵 قیمت: {price_display}
+
+📝 توضیحات:
+{seller_note}
+{SIGNATURE}"""
+
+
+async def _update_ad_channel_posts(context, ad):
+    """کپشن/متن پست آگهی را در کانال‌ها با مقادیر جدید به‌روزرسانی می‌کند."""
+    post_text = _ad_post_text(ad)
+    bot_username = (await context.bot.get_me()).username
+    color = ad.get('button_color', 'green')
+    emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}.get(color, "🟢")
+    style = {"green": "success", "red": "danger", "blue": "primary"}.get(color, "success")
+    buy_btn = InlineKeyboardMarkup([[InlineKeyboardButton(
+        f"{emoji} اطلاعات بیشتر و خرید",
+        url=f"https://t.me/{bot_username}?start=buy_{ad.get('id')}", style=style)]])
+    raw = [m for m in (ad.get('profile_photo'), ad.get('games_photo'), ad.get('video')) if m]
+
+    async def _edit(chat_id, post_id):
+        if not post_id:
+            return
+        try:
+            if len(raw) >= 2:
+                # آلبوم: دکمه روی پیام جداست، فقط کپشن را عوض کن
+                await context.bot.edit_message_caption(chat_id=chat_id, message_id=post_id, caption=post_text, parse_mode="HTML")
+            elif len(raw) == 1:
+                await context.bot.edit_message_caption(chat_id=chat_id, message_id=post_id, caption=post_text, reply_markup=buy_btn, parse_mode="HTML")
+            else:
+                await context.bot.edit_message_text(chat_id=chat_id, message_id=post_id, text=post_text, reply_markup=buy_btn, parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"آپدیت پست چنل ناموفق: {e}")
+
+    await _edit(GAME_CHANNEL_ID, ad.get('game_channel_post_id'))
+    await _edit(MAIN_CHANNEL_ID, ad.get('channel_post_id'))
+
+
+async def editad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    context.user_data['ap_waiting_editad_id'] = True
+    await query.message.edit_text("✏️ شناسه‌ی آگهی‌ای که می‌خواهید ویرایش کنید را بفرستید:",
+                                  reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))
+
+
+async def _show_ad_editor(msg, ad_id, ad, kind):
+    where = "منتشرشده" if kind == 'agahi' else "در انتظار"
+    price = _ad_effective_price(ad)
+    price_disp = f"{price:,} تومان" if isinstance(price, int) else str(price)
+    text = (f"✏️ <b>ویرایش آگهی {ad_id}</b> ({where})\n"
+            f"⭐ {ad.get('vip_count','-')} | 📊 {ad.get('item_count','-')} | 🪙 {ad.get('coin_count','-')} | "
+            f"💰 {ad.get('pip_count','-')} | 🏆 {ad.get('win_count','-')} | 📅 {ad.get('account_age','-')}\n"
+            f"💵 {price_disp}\n📝 {escape_html(ad.get('seller_note','-'))}\n\nکدام مورد را ویرایش می‌کنید؟")
+    rows = []
+    for i in range(0, len(_AD_EDIT_FIELDS), 2):
+        row = [InlineKeyboardButton(lbl, callback_data=f"aded_{ad_id}_{f}") for f, lbl in _AD_EDIT_FIELDS[i:i + 2]]
+        rows.append(row)
+    rows.append([InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")])
+    await msg.reply_text(text, reply_markup=InlineKeyboardMarkup(rows), parse_mode="HTML")
+
+
+async def editad_process_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop('ap_waiting_editad_id', None)
+    txt = (update.message.text or "").strip()
+    if not txt.isdigit():
+        await update.message.reply_text("❌ شناسه نامعتبر. یک عدد بفرست.")
+        return
+    ad, kind, _ = _find_ad_editable(int(txt))
+    if not ad:
+        await update.message.reply_text("❌ آگهی با این شناسه پیدا نشد.")
+        return
+    await _show_ad_editor(update.message, int(txt), ad, kind)
+
+
+async def editad_field_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    parts = query.data.split("_", 2)  # aded_<id>_<field>
+    ad_id = int(parts[1])
+    field = parts[2]
+    context.user_data['ap_editad'] = {'ad_id': ad_id, 'field': field}
+    label = dict(_AD_EDIT_FIELDS).get(field, field)
+    await query.message.edit_text(f"✏️ مقدار جدیدِ «{label}» برای آگهی {ad_id} را بفرستید:",
+                                  reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))
+
+
+async def editad_field_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    info = context.user_data.pop('ap_editad', None)
+    if not info:
+        return
+    ad_id, field = info['ad_id'], info['field']
+    ad, kind, container = _find_ad_editable(ad_id)
+    if not ad:
+        await update.message.reply_text("❌ آگهی یافت نشد.")
+        return
+    val = (update.message.text or "").strip()
+    if field == 'price':
+        raw = val.replace(',', '').replace('،', '')
+        if not raw.isdigit():
+            await update.message.reply_text("❌ قیمت نامعتبر. فقط عدد بفرست.")
+            context.user_data['ap_editad'] = info
+            return
+        ad['price'] = int(raw)
+    else:
+        ad[field] = val
+    # ذخیره
+    if kind == 'pending':
+        save_pending_ads(container)
+    else:
+        save_agahi(container)
+    # آپدیت پست چنل اگر منتشر شده
+    if kind == 'agahi' and (ad.get('game_channel_post_id') or ad.get('channel_post_id')):
+        await _update_ad_channel_posts(context, ad)
+        note = "و پست چنل هم به‌روز شد."
+    else:
+        note = "(هنوز در چنل منتشر نشده.)"
+    label = dict(_AD_EDIT_FIELDS).get(field, field)
+    await update.message.reply_text(
+        f"✅ «{label}» آگهی {ad_id} ویرایش شد {note}",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✏️ ویرایش مورد دیگر", callback_data=f"aded_menu_{ad_id}")],
+                                           [InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))
+
+
+async def editad_menu_again(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    ad_id = int(query.data.split("_")[2])
+    ad, kind, _ = _find_ad_editable(ad_id)
+    if not ad:
+        await query.message.edit_text("❌ آگهی یافت نشد.")
+        return
+    await _show_ad_editor(query.message, ad_id, ad, kind)

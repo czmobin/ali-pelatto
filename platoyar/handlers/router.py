@@ -137,6 +137,15 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("ap_setedit_"):
         await ap_setting_edit_prompt(update, context)
         return
+    if data == "ap_editad":
+        await editad_start(update, context)
+        return
+    if data.startswith("aded_menu_"):
+        await editad_menu_again(update, context)
+        return
+    if data.startswith("aded_"):
+        await editad_field_prompt(update, context)
+        return
     if data == "ap_db":
         await ap_db(update, context)
         return
@@ -321,6 +330,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if context.user_data.get('ap_waiting_setting'):
         await ap_process_setting(update, context)
+        return
+    if context.user_data.get('ap_waiting_editad_id'):
+        await editad_process_id(update, context)
+        return
+    if context.user_data.get('ap_editad'):
+        await editad_field_process(update, context)
         return
 
     if context.user_data.get('reject_other_ad_id'):
