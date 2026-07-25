@@ -23,9 +23,32 @@ _ACTION_PREFIXES = (
 )
 
 
+_PERM_PREFIXES = (
+    ("ads", ("set_price_", "select_color_", "color_green_", "color_red_", "color_blue_",
+             "reject_ad_", "reject_fake_", "reject_info_", "reject_violation_", "reject_other_",
+             "price_set_", "reject_price_only_", "confirm_sale_", "reject_sale_", "revert_sale_",
+             "approve_discount_", "reject_discount_", "approveprop_", "rejectprop_",
+             "ap_editad", "aded_")),
+    ("shop", ("shoporder_done_", "shoporder_reject_")),
+    ("wallet", ("confirm_charge_", "reject_charge_", "withdraw_approve_", "withdraw_reject_")),
+)
+
+
 async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
+
+    # گِیت نقش/دسترسی: اگر این اقدام به یک بخش محدود ربط دارد و ادمینِ فشاردهنده
+    # دسترسی آن بخش را ندارد، رد می‌کنیم (قبل از حذف دکمه‌ها، تا دکمه برای بقیه باقی بماند)
+    for _perm, _prefixes in _PERM_PREFIXES:
+        if any(data.startswith(p) for p in _prefixes):
+            if not has_perm(update.effective_user.id, _perm):
+                try:
+                    await query.answer("⛔ شما دسترسی به این بخش را ندارید", show_alert=True)
+                except Exception:
+                    pass
+                return
+            break
 
     # بعد از هر اقدام ادمین (تأیید/رد/قیمت/رنگ/...) دکمه‌های همان پیام حذف می‌شوند تا دوباره زده نشوند
     if any(data.startswith(p) for p in _ACTION_PREFIXES):
@@ -130,6 +153,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data.startswith("ap_admindel_"):
         await ap_admin_remove(update, context)
+        return
+    if data.startswith("ap_rtoggle_"):
+        await ap_role_toggle(update, context)
+        return
+    if data.startswith("ap_roles_"):
+        await ap_admin_roles(update, context)
         return
     if data == "ap_settings":
         await ap_settings(update, context)

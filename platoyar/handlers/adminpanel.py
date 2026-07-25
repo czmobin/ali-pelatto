@@ -346,7 +346,11 @@ async def ap_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tag = " (سوپرادمین)" if aid == SUPER_ADMIN_ID else ""
         lines.append(f"🆔 <code>{aid}</code> {escape_html(rec.get('first_name',''))} {uname}{tag}")
         if aid != SUPER_ADMIN_ID:
-            rows.append([InlineKeyboardButton(f"❌ حذف {aid}", callback_data=f"ap_admindel_{aid}")])
+            perms = get_effective_perms(aid)
+            role_txt = "، ".join(ADMIN_PERM_LABELS[p] for p in perms if p in ADMIN_PERM_LABELS) or "—"
+            lines.append(f"    🎭 نقش‌ها: {role_txt}")
+            rows.append([InlineKeyboardButton(f"🎭 نقش‌های {aid}", callback_data=f"ap_roles_{aid}"),
+                         InlineKeyboardButton("❌ حذف", callback_data=f"ap_admindel_{aid}")])
     rows.append([InlineKeyboardButton("➕ افزودن ادمین", callback_data="ap_adminadd")])
     rows.append([InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")])
     await _show(update, "\n".join(lines), rows)
@@ -388,6 +392,51 @@ async def ap_admin_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remove_admin(uid)
     await update.callback_query.answer("حذف شد")
     await ap_admins(update, context)
+
+
+# ---- مدیریت نقش/دسترسی یک ادمین (فقط سوپرادمین) ----
+async def ap_admin_roles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        await update.callback_query.answer()
+        return
+    aid = int(update.callback_query.data.split("_")[-1])
+    if aid == SUPER_ADMIN_ID:
+        await update.callback_query.answer("سوپرادمین همه‌ی دسترسی‌ها را دارد", show_alert=True)
+        return
+    perms = set(get_effective_perms(aid))
+    users = load_users()
+    rec = users.get(str(aid), {})
+    lines = [f"🎭 <b>نقش‌های ادمین</b> <code>{aid}</code>",
+             f"{escape_html(rec.get('first_name',''))}",
+             "━━━━━━━━━━━━━━━━━━━━",
+             "روی هر نقش بزنید تا فعال/غیرفعال شود:",
+             "(اگر هیچ نقشی فعال نباشد، این ادمین به هیچ بخشی دسترسی ندارد)", ""]
+    rows = []
+    for key, label in ADMIN_PERM_LABELS.items():
+        mark = "✅" if key in perms else "⬜️"
+        rows.append([InlineKeyboardButton(f"{mark} {label}", callback_data=f"ap_rtoggle_{aid}_{key}")])
+    rows.append([InlineKeyboardButton("🔙 مدیریت ادمین‌ها", callback_data="ap_admins")])
+    await _show(update, "\n".join(lines), rows)
+
+
+async def ap_role_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        await update.callback_query.answer()
+        return
+    parts = update.callback_query.data.split("_")  # ap_rtoggle_<uid>_<perm>
+    aid = int(parts[2])
+    perm = parts[3]
+    if perm not in ADMIN_PERM_LABELS:
+        await update.callback_query.answer()
+        return
+    perms = set(get_effective_perms(aid))
+    if perm in perms:
+        perms.discard(perm)
+    else:
+        perms.add(perm)
+    set_admin_perms(aid, list(perms))
+    await update.callback_query.answer("ذخیره شد")
+    await ap_admin_roles(update, context)
 
 
 # ---- دسترسی کامل به دیتابیس (فقط سوپرادمین) ----

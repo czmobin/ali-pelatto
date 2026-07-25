@@ -99,6 +99,15 @@ SHOP_UNAVAILABLE_FILE = os.path.join(DATA_FOLDER, "shop_unavailable.json")  # ل
 ADMINS_FILE = os.path.join(DATA_FOLDER, "admins.json")  # ادمین‌های اضافه‌شده در زمان اجرا
 SHOP_ORDERS_FILE = os.path.join(DATA_FOLDER, "shop_orders.json")  # سفارش‌های فروشگاه
 SETTINGS_FILE = os.path.join(DATA_FOLDER, "settings.json")  # تنظیمات قابل‌ویرایش از پنل (هزینه‌ها، کارت، متن‌ها)
+ADMIN_PERMS_FILE = os.path.join(DATA_FOLDER, "admin_perms.json")  # نقش/دسترسی هر ادمین (تعیین‌شده توسط سوپرادمین)
+
+# نقش‌های قابل‌تخصیص به ادمین‌ها. سوپرادمین همیشه همه‌ی دسترسی‌ها را دارد.
+# ادمینی که هنوز نقشی برایش تنظیم نشده، به‌طور پیش‌فرض همه‌ی دسترسی‌ها را دارد (سازگاری با قبل).
+ADMIN_PERM_LABELS = {
+    "ads": "📢 آگهی و قیمت‌گذاری",
+    "shop": "🛒 فروشگاه",
+    "wallet": "💼 کیف پول (شارژ/برداشت)",
+}
 
 # ادمین‌های ذخیره‌شده در فایل را به لیست زنده اضافه کن (بدون ساختن شیء جدید)
 try:

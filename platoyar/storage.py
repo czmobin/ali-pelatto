@@ -11,6 +11,7 @@ from .config import (
     BLACKLIST_FILE, REJECT_COUNTER_FILE, PRICE_REQUEST_FILE, REJECTED_ADS_FILE,
     REFERRAL_FILE, USERS_FILE, SHOP_PRICES_FILE, SHOP_UNAVAILABLE_FILE,
     ADMINS_FILE, ADMIN_IDS, SUPER_ADMIN_ID, SHOP_ORDERS_FILE, SETTINGS_FILE,
+    ADMIN_PERMS_FILE, ADMIN_PERM_LABELS,
 )
 from .db import kv_get, kv_set
 
@@ -300,5 +301,48 @@ def remove_admin(uid):
     if uid in ADMIN_IDS:
         ADMIN_IDS.remove(uid)
         _save_admins()
+        # نقش‌های ذخیره‌شده‌ی این ادمین را هم پاک کن
+        perms = load_admin_perms()
+        if str(uid) in perms:
+            perms.pop(str(uid))
+            save_admin_perms(perms)
         return True
     return False
+
+
+# ---- نقش/دسترسی ادمین‌ها ----
+# admin_perms.json در SQLite: {"<uid>": ["ads","shop", ...]}
+def load_admin_perms():
+    return _read_json(ADMIN_PERMS_FILE, dict)
+
+
+def save_admin_perms(data):
+    _write_json(ADMIN_PERMS_FILE, data)
+
+
+def get_effective_perms(uid):
+    """دسترسی‌های مؤثر یک ادمین. اگر رکوردی نداشته باشد → همه‌ی دسترسی‌ها (پیش‌فرض)."""
+    uid = str(uid)
+    perms = load_admin_perms()
+    if uid not in perms:
+        return list(ADMIN_PERM_LABELS.keys())
+    return perms[uid]
+
+
+def set_admin_perms(uid, perms_list):
+    data = load_admin_perms()
+    data[str(uid)] = list(perms_list)
+    save_admin_perms(data)
+
+
+def has_perm(uid, perm):
+    """آیا این کاربر اجازه‌ی این بخش را دارد؟ سوپرادمین همیشه بله."""
+    uid = int(uid)
+    if uid == SUPER_ADMIN_ID:
+        return True
+    if uid not in ADMIN_IDS:
+        return False
+    perms = load_admin_perms()
+    if str(uid) not in perms:
+        return True  # هنوز نقشی تنظیم نشده → دسترسی کامل (سازگاری با ادمین‌های قبلی)
+    return perm in perms[str(uid)]
