@@ -57,9 +57,9 @@ async def show_agahi_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = [
         [InlineKeyboardButton("➕ ثبت آگهی جدید", callback_data="agahi_submit_start", style="success")],
+        [InlineKeyboardButton("💰 درخواست قیمت‌گذاری اکانت", callback_data="price_only_start", style="danger")],
         [InlineKeyboardButton("👤 پروفایل من", callback_data="agahi_profile", style="primary")],
         [InlineKeyboardButton("📋 آگهی های من", callback_data="my_ads_menu", style="primary")],
-        [InlineKeyboardButton("💰 فقط قیمت گذاری میخواهم", callback_data="price_only_start", style="danger")],
         [InlineKeyboardButton("🔍 جستجوی آگهی", callback_data="search_menu", style="primary")],
         [InlineKeyboardButton("💼 کیف پول", callback_data="wallet_menu", style="success")],
         [InlineKeyboardButton("🎁 دعوت از دوستان", callback_data="referral_menu", style="primary")],
