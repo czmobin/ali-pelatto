@@ -131,6 +131,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("ap_admindel_"):
         await ap_admin_remove(update, context)
         return
+    if data == "ap_settings":
+        await ap_settings(update, context)
+        return
+    if data.startswith("ap_setedit_"):
+        await ap_setting_edit_prompt(update, context)
+        return
     if data == "ap_db":
         await ap_db(update, context)
         return
@@ -312,6 +318,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if context.user_data.get('ap_waiting_admin_id'):
         await ap_process_admin_add(update, context)
+        return
+    if context.user_data.get('ap_waiting_setting'):
+        await ap_process_setting(update, context)
         return
 
     if context.user_data.get('reject_other_ad_id'):

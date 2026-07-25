@@ -32,7 +32,7 @@ async def wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 📋 <b>راهنما:</b>
 • موجودی فقط برای ثبت آگهی قابل استفاده است
-• حداقل مبلغ برداشت: {MIN_WITHDRAW_AMOUNT:,} تومان
+• حداقل مبلغ برداشت: {get_setting('min_withdraw', MIN_WITHDRAW_AMOUNT):,} تومان
 
 {SIGNATURE}"""
 
@@ -52,8 +52,8 @@ async def charge_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ━━━━━━━━━━━━━━━━━━━━
 🏦 <b>شماره کارت برای واریز:</b>
-<code>{CARD_NUMBER}</code>
-👤 {CARD_NAME}
+<code>{get_setting('card_number', CARD_NUMBER)}</code>
+👤 {get_setting('card_name', CARD_NAME)}
 
 📝 مبلغ مورد نظر خود را به کارت فوق واریز کنید.
 پس از واریز، تصویر رسید را ارسال کنید.
@@ -165,9 +165,9 @@ async def withdraw_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text("❌ موجودی کیف پول شما صفر است! امکان برداشت وجود ندارد.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="wallet_menu", style="primary")]]))
         return
     
-    if balance < MIN_WITHDRAW_AMOUNT:
+    if balance < get_setting('min_withdraw', MIN_WITHDRAW_AMOUNT):
         await query.message.edit_text(
-            f"❌ حداقل مبلغ برداشت {MIN_WITHDRAW_AMOUNT:,} تومان است!\n"
+            f"❌ حداقل مبلغ برداشت {get_setting('min_withdraw', MIN_WITHDRAW_AMOUNT):,} تومان است!\n"
             f"💰 موجودی شما: {balance:,} تومان",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="wallet_menu", style="primary")]])
         )
@@ -178,7 +178,7 @@ async def withdraw_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ━━━━━━━━━━━━━━━━━━━━
 💰 <b>موجودی قابل برداشت:</b> {balance:,} تومان
 🏦 <b>شماره کارت ثبت شده:</b> {card_number}
-⚠️ <b>حداقل مبلغ برداشت:</b> {MIN_WITHDRAW_AMOUNT:,} تومان
+⚠️ <b>حداقل مبلغ برداشت:</b> {get_setting('min_withdraw', MIN_WITHDRAW_AMOUNT):,} تومان
 
 ⚠️ مبلغ به همین شماره کارت واریز خواهد شد.
 {SIGNATURE}"""
@@ -248,8 +248,8 @@ async def withdraw_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text("❌ خطا! مبلغ نامعتبر.")
         return
     
-    if amount < MIN_WITHDRAW_AMOUNT:
-        await query.message.edit_text(f"❌ حداقل مبلغ برداشت {MIN_WITHDRAW_AMOUNT:,} تومان است!")
+    if amount < get_setting('min_withdraw', MIN_WITHDRAW_AMOUNT):
+        await query.message.edit_text(f"❌ حداقل مبلغ برداشت {get_setting('min_withdraw', MIN_WITHDRAW_AMOUNT):,} تومان است!")
         return
     
     profile = load_profiles().get(str(user_id), {})

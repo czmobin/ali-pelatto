@@ -463,7 +463,7 @@ async def shop_pay_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(
         f"🏦 <b>پرداخت کارت‌به‌کارت</b>\n📦 {pend['label']}\n"
         f"💵 مبلغ: <b>{pend['price']:,}</b> تومان\n\n"
-        f"🏦 شماره کارت:\n<code>{CARD_NUMBER}</code>\n👤 {CARD_NAME}\n\n"
+        f"🏦 شماره کارت:\n<code>{get_setting('card_number', CARD_NUMBER)}</code>\n👤 {get_setting('card_name', CARD_NAME)}\n\n"
         f"📝 مبلغ بالا را واریز کنید و سپس <b>تصویر رسید</b> را همین‌جا ارسال کنید.",
         parse_mode="HTML")
 

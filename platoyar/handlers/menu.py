@@ -33,7 +33,28 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user_name = update.effective_user.first_name or "کاربر عزیز"
-    
+
+    # متن خوش‌آمد قابل‌ویرایش از پنل؛ می‌تواند {name} و {SIGNATURE} داشته باشد
+    _custom_welcome = get_setting('welcome_text')
+    if _custom_welcome:
+        welcome_text = _custom_welcome.replace('{name}', user_name).replace('{SIGNATURE}', SIGNATURE)
+        keyboard = [
+            [InlineKeyboardButton("🛒 فروشگاه", callback_data="shop_menu", style="primary")],
+            [InlineKeyboardButton("📢 ثبت آگهی", callback_data="agahi_menu", style="success")],
+            [InlineKeyboardButton("💼 کیف پول", callback_data="wallet_menu", style="primary"),
+             InlineKeyboardButton("📋 آگهی‌های من", callback_data="my_ads_menu", style="primary")],
+            [InlineKeyboardButton("🎁 دعوت دوستان", callback_data="referral_menu", style="primary"),
+             InlineKeyboardButton("🆘 پشتیبانی", callback_data="support_menu", style="danger")],
+        ]
+        if user_id in ADMIN_IDS:
+            keyboard.append([InlineKeyboardButton("🛠 پنل مدیریت", callback_data="admin_panel", style="primary")])
+        if update.callback_query:
+            await update.callback_query.message.edit_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+            await update.callback_query.answer()
+        else:
+            await update.message.reply_text(welcome_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        return
+
     welcome_text = f"""🌟 <b>به پلاتویار خوش آمدید!</b> 🌟
 
 ━━━━━━━━━━━━━━━━━━━━

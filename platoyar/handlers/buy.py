@@ -140,8 +140,8 @@ async def process_buy_from_channel(update: Update, context: ContextTypes.DEFAULT
 💵 مبلغ قابل پرداخت: {price_text}
 
 🏦 <b>شماره کارت برای واریز:</b>
-<code>{CARD_NUMBER}</code>
-👤 {CARD_NAME}
+<code>{get_setting('card_number', CARD_NUMBER)}</code>
+👤 {get_setting('card_name', CARD_NAME)}
 
 📝 مبلغ بالا را به کارت فوق واریز کنید، سپس دکمه «پرداخت انجام شد» را بزنید و تصویر رسید را ارسال کنید.
 {SIGNATURE}"""
@@ -182,8 +182,8 @@ async def confirm_buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💵 مبلغ: {price_text}
 
 🏦 شماره کارت برای واریز:
-<code>{CARD_NUMBER}</code>
-👤 {CARD_NAME}
+<code>{get_setting('card_number', CARD_NUMBER)}</code>
+👤 {get_setting('card_name', CARD_NAME)}
 
 📝 پس از واریز، روی دکمه زیر کلیک کنید.
 {SIGNATURE}"""

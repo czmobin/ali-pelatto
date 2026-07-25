@@ -73,6 +73,7 @@ def _panel_keyboard(update=None):
     if update is not None and update.effective_user and update.effective_user.id == SUPER_ADMIN_ID:
         rows.append([InlineKeyboardButton("👮 مدیریت ادمین‌ها", callback_data="ap_admins"),
                      InlineKeyboardButton("🗄 دیتابیس", callback_data="ap_db")])
+        rows.append([InlineKeyboardButton("⚙️ تنظیمات (هزینه/کارت/متن)", callback_data="ap_settings")])
     rows.append([InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back_to_main")])
     return rows
 
@@ -84,7 +85,7 @@ def _back_kb():
 def _clear_ap_flags(context):
     for k in ("ap_waiting_user_id", "ap_waiting_broadcast",
               "ap_waiting_sendone_id", "ap_waiting_sendone_text", "ap_waiting_adsearch",
-              "ap_waiting_admin_id"):
+              "ap_waiting_admin_id", "ap_waiting_setting"):
         context.user_data.pop(k, None)
 
 
@@ -451,3 +452,96 @@ async def ap_db_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                             caption="🗄 فایل کامل دیتابیس (SQLite)")
     except Exception as e:
         await update.callback_query.message.reply_text(f"❌ خطا در ارسال فایل: {e}")
+
+
+# ---- تنظیمات قابل‌ویرایش (فقط سوپرادمین) ----
+# (key, label, type, default)  type: int | text | longtext
+_SETTINGS_DEFS = [
+    ("fee_admin", "💰 هزینه تعیین قیمت توسط ادمین", "int", PRICE_ADMIN_PRICE),
+    ("fee_game", "💰 هزینه انتشار در کانال بازی", "int", PRICE_CHANNEL_GAME),
+    ("fee_both", "💰 هزینه انتشار در هر دو کانال", "int", PRICE_CHANNEL_BOTH),
+    ("min_withdraw", "💸 حداقل مبلغ برداشت", "int", MIN_WITHDRAW_AMOUNT),
+    ("card_number", "🏦 شماره کارت", "text", CARD_NUMBER),
+    ("card_name", "👤 نام صاحب کارت", "text", CARD_NAME),
+    ("welcome_text", "📝 متن خوش‌آمد منوی اصلی", "longtext", None),
+]
+_SETTINGS_BY_KEY = {d[0]: d for d in _SETTINGS_DEFS}
+
+
+async def ap_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        return
+    _clear_ap_flags(context)
+    lines = ["⚙️ <b>تنظیمات</b>", "━━━━━━━━━━━━━━━━━━━━", "روی هر مورد بزنید تا تغییرش دهید:", ""]
+    rows = []
+    for key, label, typ, default in _SETTINGS_DEFS:
+        cur = get_setting(key, default)
+        if typ == "int":
+            disp = f"{int(cur):,} تومان" if cur is not None else "-"
+        elif typ == "longtext":
+            disp = "✅ سفارشی" if get_setting(key) else "پیش‌فرض"
+        else:
+            disp = escape_html(str(cur)) if cur is not None else "-"
+        lines.append(f"{label}: <b>{disp}</b>")
+        rows.append([InlineKeyboardButton(f"✏️ {label}", callback_data=f"ap_setedit_{key}")])
+    rows.append([InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")])
+    await _show(update, "\n".join(lines), rows)
+
+
+async def ap_setting_edit_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        await update.callback_query.answer()
+        return
+    key = update.callback_query.data[len("ap_setedit_"):]
+    d = _SETTINGS_BY_KEY.get(key)
+    if not d:
+        await update.callback_query.answer()
+        return
+    _clear_ap_flags(context)
+    context.user_data["ap_waiting_setting"] = key
+    label, typ, default = d[1], d[2], d[3]
+    cur = get_setting(key, default)
+    if typ == "int":
+        hint = "مقدار جدید را به تومان (فقط عدد) بفرستید:"
+        curline = f"مقدار فعلی: {int(cur):,} تومان" if cur is not None else ""
+    elif typ == "longtext":
+        hint = ("متن جدید را بفرستید. می‌توانید از <code>{name}</code> (نام کاربر) و "
+                "<code>{SIGNATURE}</code> (امضا) استفاده کنید.\nبرای بازگشت به پیش‌فرض، «-» بفرستید.")
+        curline = ""
+    else:
+        hint = "مقدار جدید را بفرستید. برای بازگشت به پیش‌فرض «-» بفرستید:"
+        curline = f"مقدار فعلی: {escape_html(str(cur))}" if cur is not None else ""
+    await _show(update, f"✏️ <b>{label}</b>\n{curline}\n\n{hint}",
+                [[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]])
+
+
+async def ap_process_setting(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    key = context.user_data.pop("ap_waiting_setting", None)
+    if not key:
+        return
+    d = _SETTINGS_BY_KEY.get(key)
+    if not d:
+        return
+    typ = d[2]
+    text = (update.message.text or "").strip()
+    prices = load_settings()
+    if typ == "int":
+        raw = text.replace(",", "").replace("،", "")
+        if not raw.isdigit():
+            await update.message.reply_text("❌ مقدار نامعتبر. فقط عدد بفرست.")
+            context.user_data["ap_waiting_setting"] = key
+            return
+        set_setting(key, int(raw))
+        await update.message.reply_text(f"✅ «{d[1]}» روی {int(raw):,} تومان تنظیم شد.",
+                                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]]))
+    else:
+        if text == "-":
+            s = load_settings()
+            s.pop(key, None)
+            save_settings(s)
+            await update.message.reply_text(f"✅ «{d[1]}» به حالت پیش‌فرض برگشت.",
+                                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]]))
+        else:
+            set_setting(key, text)
+            await update.message.reply_text(f"✅ «{d[1]}» ذخیره شد.",
+                                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]]))

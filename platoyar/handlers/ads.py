@@ -407,7 +407,7 @@ async def handle_price_only_form(update: Update, context: ContextTypes.DEFAULT_T
 
 async def show_invoice_price_only(update: Update, context: ContextTypes.DEFAULT_TYPE):
     temp = context.user_data.get('temp_agahi', {})
-    total_fee = PRICE_ADMIN_PRICE
+    total_fee = get_setting('fee_admin', PRICE_ADMIN_PRICE)
     user_id = update.effective_user.id
     wallet_balance = get_wallet_balance(user_id)
     
@@ -445,7 +445,7 @@ async def pay_price_only_wallet(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     user_id = query.from_user.id
     
-    total_fee = PRICE_ADMIN_PRICE
+    total_fee = get_setting('fee_admin', PRICE_ADMIN_PRICE)
     wallet_balance = get_wallet_balance(user_id)
     
     if wallet_balance >= total_fee:
@@ -465,11 +465,11 @@ async def pay_price_only_card(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['waiting_price_only_receipt'] = True
     await query.message.edit_text(f"""💳 <b>پرداخت کارت به کارت</b>
 
-💰 مبلغ: {PRICE_ADMIN_PRICE:,} تومان
+💰 مبلغ: {get_setting('fee_admin', PRICE_ADMIN_PRICE):,} تومان
 
 🏦 شماره کارت:
-<code>{CARD_NUMBER}</code>
-👤 {CARD_NAME}
+<code>{get_setting('card_number', CARD_NUMBER)}</code>
+👤 {get_setting('card_name', CARD_NAME)}
 
 📝 پس از واریز، تصویر رسید را ارسال کنید.
 {SIGNATURE}""", parse_mode="HTML")
@@ -512,9 +512,9 @@ async def price_method_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     context.user_data['price_method'] = 'admin'
-    context.user_data['admin_price_fee'] = PRICE_ADMIN_PRICE
+    context.user_data['admin_price_fee'] = get_setting('fee_admin', PRICE_ADMIN_PRICE)
     context.user_data['temp_agahi']['price'] = "تعیین توسط ادمین"
-    await query.message.edit_text(f"✅ روش قیمت گذاری توسط ادمین انتخاب شد.\n💰 هزینه: {PRICE_ADMIN_PRICE:,} تومان")
+    await query.message.edit_text(f"✅ روش قیمت گذاری توسط ادمین انتخاب شد.\n💰 هزینه: {get_setting('fee_admin', PRICE_ADMIN_PRICE):,} تومان")
     await ask_publish_method(update, context, from_callback=True)
 
 
@@ -550,7 +550,7 @@ async def publish_game(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data['publish_method'] = 'game'
-    context.user_data['publish_fee'] = PRICE_CHANNEL_GAME
+    context.user_data['publish_fee'] = get_setting('fee_game', PRICE_CHANNEL_GAME)
     await show_invoice(update, context)
 
 
@@ -558,7 +558,7 @@ async def publish_both(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     context.user_data['publish_method'] = 'both'
-    context.user_data['publish_fee'] = PRICE_CHANNEL_BOTH
+    context.user_data['publish_fee'] = get_setting('fee_both', PRICE_CHANNEL_BOTH)
     await show_invoice(update, context)
 
 
@@ -658,8 +658,8 @@ async def card_payment_after_wallet(update: Update, context: ContextTypes.DEFAUL
 💎 کسر شده از کیف پول: {wallet_balance:,} تومان
 
 🏦 شماره کارت برای واریز:
-<code>{CARD_NUMBER}</code>
-👤 {CARD_NAME}
+<code>{get_setting('card_number', CARD_NUMBER)}</code>
+👤 {get_setting('card_name', CARD_NAME)}
 
 📝 پس از واریز، روی دکمه زیر کلیک کنید.
 {SIGNATURE}"""
@@ -684,8 +684,8 @@ async def card_payment_only(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💰 مبلغ قابل پرداخت: {total_fee:,} تومان
 
 🏦 شماره کارت برای واریز:
-<code>{CARD_NUMBER}</code>
-👤 {CARD_NAME}
+<code>{get_setting('card_number', CARD_NUMBER)}</code>
+👤 {get_setting('card_name', CARD_NAME)}
 
 📝 پس از واریز، روی دکمه زیر کلیک کنید.
 {SIGNATURE}"""
