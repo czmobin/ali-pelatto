@@ -34,7 +34,7 @@ async def show_agahi_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bot_username = (await context.bot.get_me()).username
     referral_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     
-    text = f"""📢 <b>سیستم ثبت آگهی پلاتویار</b>
+    default_text = f"""📢 <b>سیستم ثبت آگهی پلاتویار</b>
 
 ━━━━━━━━━━━━━━━━━━━━
 💰 <b>موجودی کیف پول:</b> {wallet_balance:,} تومان
@@ -54,6 +54,9 @@ async def show_agahi_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 هدیه تعلق می‌گیرد!
 
 {SIGNATURE}"""
+    _custom = get_setting('agahi_menu_text')
+    text = (_custom.replace('{balance}', f"{wallet_balance:,}").replace('{SIGNATURE}', SIGNATURE)
+            if _custom else default_text)
     
     keyboard = [
         [InlineKeyboardButton("➕ ثبت آگهی جدید", callback_data="agahi_submit_start", style="success")],
@@ -70,7 +73,7 @@ async def show_agahi_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_terms_before_form(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    terms_text = f"""📋 <b>قوانین و شرایط ثبت آگهی در پلاتویار</b>
+    default_terms = f"""📋 <b>قوانین و شرایط ثبت آگهی در پلاتویار</b>
 
 ━━━━━━━━━━━━━━━━━━━━
 📌 <b>مدارک مورد نیاز:</b>
@@ -122,6 +125,8 @@ async def show_terms_before_form(update: Update, context: ContextTypes.DEFAULT_T
 • کانال پابجی و کالاف: {NEW_CHANNEL_LINK}
 
 {SIGNATURE}"""
+    _custom = get_setting('terms_text')
+    terms_text = _custom.replace('{SIGNATURE}', SIGNATURE) if _custom else default_terms
 
     keyboard = [
         [InlineKeyboardButton("✅ تایید و ادامه", callback_data="terms_accepted_start_form", style="success")],

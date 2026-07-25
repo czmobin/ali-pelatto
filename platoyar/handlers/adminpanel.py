@@ -514,9 +514,27 @@ _SETTINGS_DEFS = [
     ("min_withdraw", "💸 حداقل مبلغ برداشت", "int", MIN_WITHDRAW_AMOUNT),
     ("card_number", "🏦 شماره کارت", "text", CARD_NUMBER),
     ("card_name", "👤 نام صاحب کارت", "text", CARD_NAME),
-    ("welcome_text", "📝 متن خوش‌آمد منوی اصلی", "longtext", None),
 ]
-_SETTINGS_BY_KEY = {d[0]: d for d in _SETTINGS_DEFS}
+
+# متن صفحات ربات (قابل‌ویرایش کامل). می‌توانند placeholder داشته باشند.
+_PAGE_DEFS = [
+    ("welcome_text", "📝 صفحه‌ی اصلی / خوش‌آمد (چرا پلاتویار)", "longtext", None),
+    ("agahi_menu_text", "📢 صفحه‌ی منوی ثبت آگهی", "longtext", None),
+    ("terms_text", "📋 صفحه‌ی قوانین ثبت آگهی", "longtext", None),
+    ("support_text", "🆘 صفحه‌ی پشتیبانی", "longtext", None),
+]
+_PAGE_PLACEHOLDERS = {
+    "welcome_text": "{name}=نام کاربر ، {SIGNATURE}=امضا",
+    "agahi_menu_text": "{balance}=موجودی کیف پول ، {SIGNATURE}=امضا",
+    "terms_text": "{SIGNATURE}=امضا",
+    "support_text": "{SIGNATURE}=امضا",
+}
+_PAGE_BY_KEY = {d[0]: d for d in _PAGE_DEFS}
+_SETTINGS_BY_KEY = {**{d[0]: d for d in _SETTINGS_DEFS}, **_PAGE_BY_KEY}
+
+
+def _setting_back_cb(key):
+    return "ap_pages" if key in _PAGE_BY_KEY else "ap_settings"
 
 
 async def ap_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -529,13 +547,27 @@ async def ap_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cur = get_setting(key, default)
         if typ == "int":
             disp = f"{int(cur):,} تومان" if cur is not None else "-"
-        elif typ == "longtext":
-            disp = "✅ سفارشی" if get_setting(key) else "پیش‌فرض"
         else:
             disp = escape_html(str(cur)) if cur is not None else "-"
         lines.append(f"{label}: <b>{disp}</b>")
         rows.append([InlineKeyboardButton(f"✏️ {label}", callback_data=f"ap_setedit_{key}")])
+    rows.append([InlineKeyboardButton("📄 متن صفحات ربات", callback_data="ap_pages")])
     rows.append([InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")])
+    await _show(update, "\n".join(lines), rows)
+
+
+async def ap_pages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_super(update):
+        return
+    _clear_ap_flags(context)
+    lines = ["📄 <b>متن صفحات ربات</b>", "━━━━━━━━━━━━━━━━━━━━",
+             "متن کامل هر صفحه را می‌توانید بازنویسی کنید.", "روی هر صفحه بزنید:", ""]
+    rows = []
+    for key, label, typ, default in _PAGE_DEFS:
+        disp = "✅ سفارشی" if get_setting(key) else "پیش‌فرض"
+        lines.append(f"{label}: <b>{disp}</b>")
+        rows.append([InlineKeyboardButton(f"✏️ {label}", callback_data=f"ap_setedit_{key}")])
+    rows.append([InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")])
     await _show(update, "\n".join(lines), rows)
 
 
@@ -552,18 +584,20 @@ async def ap_setting_edit_prompt(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["ap_waiting_setting"] = key
     label, typ, default = d[1], d[2], d[3]
     cur = get_setting(key, default)
+    back_cb = _setting_back_cb(key)
     if typ == "int":
         hint = "مقدار جدید را به تومان (فقط عدد) بفرستید:"
         curline = f"مقدار فعلی: {int(cur):,} تومان" if cur is not None else ""
     elif typ == "longtext":
-        hint = ("متن جدید را بفرستید. می‌توانید از <code>{name}</code> (نام کاربر) و "
-                "<code>{SIGNATURE}</code> (امضا) استفاده کنید.\nبرای بازگشت به پیش‌فرض، «-» بفرستید.")
+        ph = _PAGE_PLACEHOLDERS.get(key, "{SIGNATURE}=امضا")
+        hint = (f"متن کامل جدید را بفرستید.\n🔤 نگه‌دارنده‌ها: <code>{escape_html(ph)}</code>\n"
+                "برای بازگشت به متن پیش‌فرض، «-» بفرستید.")
         curline = ""
     else:
         hint = "مقدار جدید را بفرستید. برای بازگشت به پیش‌فرض «-» بفرستید:"
         curline = f"مقدار فعلی: {escape_html(str(cur))}" if cur is not None else ""
     await _show(update, f"✏️ <b>{label}</b>\n{curline}\n\n{hint}",
-                [[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]])
+                [[InlineKeyboardButton("🔙 بازگشت", callback_data=back_cb)]])
 
 
 async def ap_process_setting(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -575,7 +609,8 @@ async def ap_process_setting(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     typ = d[2]
     text = (update.message.text or "").strip()
-    prices = load_settings()
+    back_cb = _setting_back_cb(key)
+    back_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data=back_cb)]])
     if typ == "int":
         raw = text.replace(",", "").replace("،", "")
         if not raw.isdigit():
@@ -583,16 +618,13 @@ async def ap_process_setting(update: Update, context: ContextTypes.DEFAULT_TYPE)
             context.user_data["ap_waiting_setting"] = key
             return
         set_setting(key, int(raw))
-        await update.message.reply_text(f"✅ «{d[1]}» روی {int(raw):,} تومان تنظیم شد.",
-                                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]]))
+        await update.message.reply_text(f"✅ «{d[1]}» روی {int(raw):,} تومان تنظیم شد.", reply_markup=back_kb)
     else:
         if text == "-":
             s = load_settings()
             s.pop(key, None)
             save_settings(s)
-            await update.message.reply_text(f"✅ «{d[1]}» به حالت پیش‌فرض برگشت.",
-                                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]]))
+            await update.message.reply_text(f"✅ «{d[1]}» به حالت پیش‌فرض برگشت.", reply_markup=back_kb)
         else:
             set_setting(key, text)
-            await update.message.reply_text(f"✅ «{d[1]}» ذخیره شد.",
-                                            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 تنظیمات", callback_data="ap_settings")]]))
+            await update.message.reply_text(f"✅ «{d[1]}» ذخیره شد.", reply_markup=back_kb)

@@ -115,7 +115,7 @@ async def support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    support_text = f"""🆘 <b>پشتیبانی پلاتویار</b>
+    default_support = f"""🆘 <b>پشتیبانی پلاتویار</b>
 
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ <b>ساعات پاسخگویی:</b>
@@ -128,6 +128,8 @@ async def support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • راهنمایی و آموزش
 • گزارش تخلفات
 • پیشنهادات و انتقادات"""
+    _custom = get_setting('support_text')
+    support_text = _custom.replace('{SIGNATURE}', SIGNATURE) if _custom else default_support
 
     keyboard = [
         [InlineKeyboardButton("📞 تماس با ادمین", url=f"https://t.me/{ADMIN_USERNAME[1:]}", style="primary")],

@@ -163,6 +163,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "ap_settings":
         await ap_settings(update, context)
         return
+    if data == "ap_pages":
+        await ap_pages(update, context)
+        return
     if data.startswith("ap_setedit_"):
         await ap_setting_edit_prompt(update, context)
         return
