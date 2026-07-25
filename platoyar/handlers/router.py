@@ -19,7 +19,7 @@ _ACTION_PREFIXES = (
     "price_set_", "reject_price_only_", "confirm_charge_", "reject_charge_",
     "withdraw_approve_", "withdraw_reject_", "confirm_sale_", "reject_sale_",
     "approve_discount_", "reject_discount_", "confirm_publish_",
-    "propose_price_", "approveprop_", "rejectprop_",
+    "propose_price_", "approveprop_", "rejectprop_", "revert_sale_",
 )
 
 
@@ -263,6 +263,8 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await receipt_buy(update, context)
     elif data.startswith("confirm_sale_"):
         await confirm_sale(update, context)
+    elif data.startswith("revert_sale_"):
+        await revert_sale(update, context)
     elif data.startswith("reject_sale_"):
         await reject_sale(update, context)
     elif data.startswith("withdraw_approve_"):

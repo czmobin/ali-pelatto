@@ -559,7 +559,12 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
         else:
             await update.message.reply_text("❌ آگهی یافت نشد!")
         return
-    
+
+    # شماره‌ی تازه در لحظه‌ی انتشار تا ترتیب چنل با ترتیب انتشار بخواند، نه ترتیب ثبت
+    old_pending_id = ad_id
+    ad_id = get_next_ad_id()
+    ad['id'] = ad_id
+
     bot_username = (await context.bot.get_me()).username
 
     price_value = ad.get('price')
@@ -648,8 +653,8 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
         save_agahi(all_agahi)
         
         pending_ads = load_pending_ads()
-        if str(ad_id) in pending_ads:
-            del pending_ads[str(ad_id)]
+        if str(old_pending_id) in pending_ads:
+            del pending_ads[str(old_pending_id)]
             save_pending_ads(pending_ads)
         
         # سیستم رفرال

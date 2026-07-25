@@ -421,12 +421,13 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 except Exception:
                     pass
             # ارسال ریپلای
-            await context.bot.send_message(
+            _sr = await context.bot.send_message(
                 chat_id=GAME_CHANNEL_ID,
                 text=reply_text,
                 reply_to_message_id=game_channel_post_id,
                 parse_mode="HTML"
             )
+            ad['game_sold_reply_id'] = _sr.message_id
         except Exception as e:
             logger.error(f"خطا در کانال بازی: {e}")
     
@@ -456,12 +457,13 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 except Exception:
                     pass
             # ارسال ریپلای
-            await context.bot.send_message(
+            _sr = await context.bot.send_message(
                 chat_id=MAIN_CHANNEL_ID,
                 text=reply_text,
                 reply_to_message_id=channel_post_id,
                 parse_mode="HTML"
             )
+            ad['channel_sold_reply_id'] = _sr.message_id
         except Exception as e:
             logger.error(f"خطا در کانال اصلی: {e}")
     
@@ -492,9 +494,109 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # پیام نهایی
     await update.message.reply_text(f"✅ خرید آگهی {ad_id} تایید شد.\n🔗 لینک گروه برای فروشنده و خریدار ارسال شد.\n{SIGNATURE}")
-    await send_to_target(context, GROUP_WALLET, text=f"✅ خرید آگهی {ad_id} تکمیل شد.\nلینک گروه: {group_link}")
-    
+    revert_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 کنسل معامله و برگرداندن آگهی", callback_data=f"revert_sale_{ad_id}", style="danger")]])
+    await send_to_target(context, GROUP_WALLET, text=f"✅ خرید آگهی {ad_id} تکمیل شد.\nلینک گروه: {group_link}\n\nاگر معامله کنسل شد، دکمه‌ی زیر آگهی را به حالت اول برمی‌گرداند:", reply_markup=revert_kb)
+
     context.user_data['waiting_group_link'] = None
+
+
+async def revert_sale(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """کنسل معامله: آگهیِ فروخته‌شده را به حالت منتشرشده برمی‌گرداند."""
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    ad_id = int(query.data.split("_")[2])
+    all_agahi = load_agahi()
+    ad = None
+    for uid, ads in all_agahi.items():
+        for a in ads:
+            if a.get('id') == ad_id:
+                ad = a
+                break
+        if ad:
+            break
+    if not ad:
+        await query.message.edit_text("❌ آگهی یافت نشد.")
+        return
+    if ad.get('status') != 'sold':
+        await query.message.edit_text("این آگهی در حالت فروخته‌شده نیست.")
+        return
+
+    bot_username = (await context.bot.get_me()).username
+    price_value = ad.get('price')
+    # قیمت با تخفیف فعال (اگر باشد)
+    if ad.get('discount_history'):
+        for disc in reversed(ad['discount_history']):
+            if disc.get('is_active', True):
+                price_value = disc.get('new_price', price_value)
+                break
+    price_display = f"<b>{price_value:,}</b> تومان" if isinstance(price_value, int) else str(price_value)
+    seller_note = escape_html(ad.get('seller_note', '-'))
+    post_text = f"""🎮 <b>آگهی فروش اکانت پلاتو</b>
+
+🆔 شناسه: {ad_id}
+
+⭐ ویپ: {ad.get('vip_count', '-')}
+📊 آیتم: {ad.get('item_count', '-')}
+🪙 سکه: {ad.get('coin_count', '-')}
+💰 پیپ: {ad.get('pip_count', '-')}
+🏆 وین: {ad.get('win_count', '-')}
+📅 سن اکانت: {ad.get('account_age', '-')}
+💵 قیمت: {price_display}
+
+📝 توضیحات:
+{seller_note}
+{SIGNATURE}"""
+
+    color = ad.get('button_color', 'green')
+    emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}.get(color, "🟢")
+    style = {"green": "success", "red": "danger", "blue": "primary"}.get(color, "success")
+    buy_url = f"https://t.me/{bot_username}?start=buy_{ad_id}"
+    buy_btn = InlineKeyboardMarkup([[InlineKeyboardButton(f"{emoji} اطلاعات بیشتر و خرید", url=buy_url, style=style)]])
+
+    raw = [m for m in (ad.get('profile_photo'), ad.get('games_photo'), ad.get('video')) if m]
+
+    async def _restore(chat_id, post_id, button_key, sold_reply_key):
+        if not post_id:
+            return
+        try:
+            if len(raw) >= 2:
+                # آلبوم: کپشن را برگردان، دکمه‌ی خرید را دوباره به‌صورت ریپلای بفرست
+                await context.bot.edit_message_caption(chat_id=chat_id, message_id=post_id, caption=post_text, parse_mode="HTML")
+                btn = await context.bot.send_message(
+                    chat_id=chat_id, text="👆 برای مشاهده‌ی کامل و خرید این اکانت، دکمه‌ی زیر را بزنید:",
+                    reply_markup=buy_btn, reply_to_message_id=post_id)
+                ad[button_key] = btn.message_id
+            elif len(raw) == 1:
+                await context.bot.edit_message_caption(chat_id=chat_id, message_id=post_id, caption=post_text, reply_markup=buy_btn, parse_mode="HTML")
+            else:
+                await context.bot.edit_message_text(chat_id=chat_id, message_id=post_id, text=post_text, reply_markup=buy_btn, parse_mode="HTML")
+        except Exception as e:
+            logger.error(f"بازگردانی پست ناموفق: {e}")
+        # حذف ریپلای «فروخته شد»
+        if ad.get(sold_reply_key):
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=ad[sold_reply_key])
+            except Exception:
+                pass
+            ad[sold_reply_key] = None
+
+    await _restore(GAME_CHANNEL_ID, ad.get('game_channel_post_id'), 'game_channel_button_id', 'game_sold_reply_id')
+    if ad.get('channel_post_id'):
+        await _restore(MAIN_CHANNEL_ID, ad.get('channel_post_id'), 'channel_button_id', 'channel_sold_reply_id')
+
+    ad['status'] = 'published'
+    ad['published'] = True
+    for k in ('sold_date', 'buyer_id', 'days_to_sell'):
+        ad.pop(k, None)
+    save_agahi(all_agahi)
+
+    await query.message.edit_text(f"🔄 معامله‌ی آگهی {ad_id} کنسل شد و آگهی به حالت منتشرشده برگشت.")
+    try:
+        await context.bot.send_message(chat_id=ad['user_id'], text=f"🔄 معامله‌ی آگهی {ad_id} کنسل شد و آگهی شما دوباره در چنل فعال شد.\n{SIGNATURE}")
+    except Exception:
+        pass
 
 
 async def reject_sale(update: Update, context: ContextTypes.DEFAULT_TYPE):
