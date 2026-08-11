@@ -1242,49 +1242,48 @@ async def admin_manual_ad_start(update: Update, context: ContextTypes.DEFAULT_TY
         await query.answer("⛔ دسترسی ندارید", show_alert=True)
         return
     context.user_data.clear()
-    context.user_data['admin_manual_ad'] = 'waiting_post'
-    context.user_data['manual_ad_data'] = {}
+    context.user_data['admin_manual_ad'] = 'collecting'
+    context.user_data['manual_ad_data'] = {'media': [], 'caption': ''}
     await query.message.edit_text(
         "➕ <b>ثبت آگهی دستی</b>\n\n"
-        "پستِ آگهی را بفرست: یک <b>عکس</b> یا <b>ویدیو</b> همراه با <b>متن کامل (کپشن)</b> — "
-        "یا فقط متن. عیناً همون چیزی که می‌خوای توی کانال منتشر بشه.\n\n"
-        "بعدش فقط <b>قیمت</b> رو می‌پرسم و مستقیم منتشر می‌کنم (هیچ سؤال دیگه‌ای نیست).",
+        "۱️⃣ عکس(ها) و ویدیوی آگهی را بفرست — می‌تونی <b>چند مورد</b> یا یک <b>آلبوم</b> بفرستی (عکس + فیلم با هم).\n"
+        "۲️⃣ کپشن رو روی یکی از عکس‌ها/فیلم‌ها بنویس یا جدا به‌صورت متن بفرست.\n"
+        "۳️⃣ آخرش فقط <b>قیمت</b> (عدد) رو بفرست تا مستقیم منتشر بشه.\n\n"
+        "هیچ سؤال مرحله‌ای دیگه‌ای نیست.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")]]))
 
 
-async def admin_manual_ad_receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_manual_ad_collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """جمع‌آوری رسانه‌ها و کپشن. با فرستادن قیمت (عدد) منتشر می‌شود."""
     msg = update.message
-    data = context.user_data.get('manual_ad_data', {})
-    caption = (msg.caption or msg.text or "").strip()
+    data = context.user_data.setdefault('manual_ad_data', {'media': [], 'caption': ''})
+    data.setdefault('media', [])
+    if msg.caption:
+        data['caption'] = msg.caption.strip()
     if msg.photo:
-        data['media_type'] = 'photo'
-        data['media_file_id'] = msg.photo[-1].file_id
-    elif msg.video:
-        data['media_type'] = 'video'
-        data['media_file_id'] = msg.video.file_id
-    else:
-        data['media_type'] = None
-        data['media_file_id'] = None
-    if not caption and not data.get('media_file_id'):
-        await msg.reply_text("❌ چیزی دریافت نشد. یک عکس/ویدیو با کپشن یا یک متن بفرست.")
+        data['media'].append({'type': 'photo', 'file_id': msg.photo[-1].file_id})
+        await msg.reply_text(f"🖼 عکس دریافت شد (تعداد رسانه: {len(data['media'])}).\nبقیه رسانه‌ها رو بفرست، یا <b>قیمت (عدد)</b> رو بفرست تا منتشر بشه.", parse_mode="HTML")
         return
-    data['caption'] = caption
-    context.user_data['manual_ad_data'] = data
-    context.user_data['admin_manual_ad'] = 'waiting_price'
-    await msg.reply_text(
-        "✅ پست دریافت شد.\n\n💵 حالا فقط <b>قیمت</b> را به تومان بفرست (فقط عدد):",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")]]))
+    if msg.video:
+        data['media'].append({'type': 'video', 'file_id': msg.video.file_id})
+        await msg.reply_text(f"🎬 ویدیو دریافت شد (تعداد رسانه: {len(data['media'])}).\nبقیه رسانه‌ها رو بفرست، یا <b>قیمت (عدد)</b> رو بفرست تا منتشر بشه.", parse_mode="HTML")
+        return
+    text = (msg.text or "").strip()
+    num = text.replace(",", "").replace("،", "")
+    if num.isdigit():
+        await _publish_manual_ad(update, context, data, int(num))
+        return
+    if text:
+        data['caption'] = text
+        await msg.reply_text("📝 کپشن ثبت شد.\nحالا <b>قیمت (عدد)</b> رو بفرست تا منتشر بشه، یا رسانه‌ی بیشتری اضافه کن.", parse_mode="HTML")
+        return
+    await msg.reply_text("❌ چیزی دریافت نشد. عکس/ویدیو یا متن بفرست، و در آخر قیمت (عدد).")
 
 
-async def admin_manual_ad_receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    raw = (update.message.text or "").replace(",", "").replace("،", "").strip()
-    if not raw.isdigit():
-        await update.message.reply_text("❌ قیمت نامعتبر. فقط عدد بفرست.")
-        return
-    price = int(raw)
-    data = context.user_data.get('manual_ad_data', {})
+async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, data, price):
+    media = data.get('media', [])
+    caption = data.get('caption', '')
     context.user_data.pop('admin_manual_ad', None)
     context.user_data.pop('manual_ad_data', None)
 
@@ -1295,13 +1294,10 @@ async def admin_manual_ad_receive_price(update: Update, context: ContextTypes.DE
     emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}[color]
     style = {"green": "success", "red": "danger", "blue": "primary"}[color]
     bot_username = (await context.bot.get_me()).username
-    caption = data.get('caption', '')
     post_text = f"{caption}\n{SIGNATURE}" if caption else f"🎮 <b>آگهی فروش اکانت پلاتو</b>\n{SIGNATURE}"
     keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
         f"{emoji} اطلاعات بیشتر و خرید",
         url=f"https://t.me/{bot_username}?start=buy_{ad_id}", style=style)]])
-    mt = data.get('media_type')
-    fid = data.get('media_file_id')
 
     ad = {
         'id': ad_id, 'user_id': admin_id, 'price': price,
@@ -1310,27 +1306,47 @@ async def admin_manual_ad_receive_price(update: Update, context: ContextTypes.DE
         'publish_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         'manual': True,
     }
-    if mt == 'photo':
-        ad['profile_photo'] = fid
-    elif mt == 'video':
-        ad['video'] = fid
+    # نگاشت رسانه‌ها به فیلدهای استاندارد (برای فروش/کنسل/حذف)
+    photos = [m['file_id'] for m in media if m['type'] == 'photo']
+    videos = [m['file_id'] for m in media if m['type'] == 'video']
+    if len(photos) >= 1:
+        ad['profile_photo'] = photos[0]
+    if len(photos) >= 2:
+        ad['games_photo'] = photos[1]
+    if videos:
+        ad['video'] = videos[0]
 
     async def _post(chat_id):
-        if mt == 'photo':
-            sent = await context.bot.send_photo(chat_id=chat_id, photo=fid, caption=post_text, reply_markup=keyboard, parse_mode="HTML")
-        elif mt == 'video':
-            sent = await context.bot.send_video(chat_id=chat_id, video=fid, caption=post_text, reply_markup=keyboard, parse_mode="HTML")
+        if len(media) >= 2:
+            mg = []
+            for i, m in enumerate(media):
+                cap = post_text if i == 0 else None
+                pm = "HTML" if i == 0 else None
+                if m['type'] == 'video':
+                    mg.append(InputMediaVideo(media=m['file_id'], caption=cap, parse_mode=pm))
+                else:
+                    mg.append(InputMediaPhoto(media=m['file_id'], caption=cap, parse_mode=pm))
+            sent = await context.bot.send_media_group(chat_id=chat_id, media=mg)
+            btn = await context.bot.send_message(
+                chat_id=chat_id, text="👆 برای مشاهده‌ی کامل و خرید این اکانت، دکمه‌ی زیر را بزنید:",
+                reply_markup=keyboard, reply_to_message_id=sent[0].message_id)
+            return sent[0].message_id, btn.message_id, [m.message_id for m in sent]
+        elif len(media) == 1:
+            m = media[0]
+            if m['type'] == 'video':
+                sent = await context.bot.send_video(chat_id=chat_id, video=m['file_id'], caption=post_text, reply_markup=keyboard, parse_mode="HTML")
+            else:
+                sent = await context.bot.send_photo(chat_id=chat_id, photo=m['file_id'], caption=post_text, reply_markup=keyboard, parse_mode="HTML")
+            return sent.message_id, None, [sent.message_id]
         else:
             sent = await context.bot.send_message(chat_id=chat_id, text=post_text, reply_markup=keyboard, parse_mode="HTML")
-        return sent.message_id, [sent.message_id]
+            return sent.message_id, None, [sent.message_id]
 
     try:
-        ad['game_channel_post_id'], ad['game_channel_media_ids'] = await _post(GAME_CHANNEL_ID)
-        ad['game_channel_button_id'] = None
-        ad['channel_post_id'], ad['channel_media_ids'] = await _post(MAIN_CHANNEL_ID)
-        ad['channel_button_id'] = None
+        ad['game_channel_post_id'], ad['game_channel_button_id'], ad['game_channel_media_ids'] = await _post(GAME_CHANNEL_ID)
+        ad['channel_post_id'], ad['channel_button_id'], ad['channel_media_ids'] = await _post(MAIN_CHANNEL_ID)
     except Exception as e:
-        await update.message.reply_text(f"❌ خطا در انتشار: {e}\n(اگر کپشن خیلی بلند بود، کوتاه‌ترش کن)")
+        await update.message.reply_text(f"❌ خطا در انتشار: {e}\n(اگر کپشن خیلی بلند بود کوتاه‌ترش کن)")
         return
 
     all_agahi = load_agahi()
@@ -1339,7 +1355,6 @@ async def admin_manual_ad_receive_price(update: Update, context: ContextTypes.DE
 
     await update.message.reply_text(
         f"✅ آگهی دستی با شناسه <b>{ad_id}</b> منتشر شد (کانال بازی + اصلی).\n"
-        f"💵 قیمت: {price:,} تومان | 🎨 رنگ دکمه: {emoji}\n"
-        f"خرید از طریق دکمه‌ی زیر پست انجام می‌شود.",
+        f"🖼 تعداد رسانه: {len(media)} | 💵 قیمت: {price:,} تومان | 🎨 رنگ دکمه: {emoji}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))

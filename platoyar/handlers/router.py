@@ -378,11 +378,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('ap_editad'):
         await editad_field_process(update, context)
         return
-    if context.user_data.get('admin_manual_ad') == 'waiting_post':
-        await admin_manual_ad_receive_post(update, context)
-        return
-    if context.user_data.get('admin_manual_ad') == 'waiting_price':
-        await admin_manual_ad_receive_price(update, context)
+    if context.user_data.get('admin_manual_ad') == 'collecting':
+        await admin_manual_ad_collect(update, context)
         return
 
     if context.user_data.get('reject_other_ad_id'):
