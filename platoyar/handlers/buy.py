@@ -623,3 +623,133 @@ async def process_reject_sale_reason(update: Update, context: ContextTypes.DEFAU
     await update.message.reply_text(f"✅ خرید آگهی {ad_id} رد شد.")
     context.user_data['reject_sale_id'] = None
     context.user_data['reject_buyer_id'] = None
+
+
+# ============================================================
+# ثبت فروش دستی توسط ادمین (برای آگهی‌هایی که خارج از کانال فروخته شده‌اند)
+# پست کانال را دقیقاً مثل فروش واقعی «فروخته شد» می‌کند: ویرایش کپشن، حذف دکمه، ریپلای.
+# ============================================================
+async def admin_mark_sold(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if update.effective_user.id not in ADMIN_IDS:
+        return
+    try:
+        ad_id = int(query.data.split("_")[-1])
+    except Exception:
+        return
+
+    all_agahi = load_agahi()
+    ad = None
+    seller_id = None
+    for uid, ads in all_agahi.items():
+        for a in ads:
+            if a.get('id') == ad_id:
+                ad = a
+                seller_id = int(uid)
+                break
+        if ad:
+            break
+
+    if not ad:
+        await query.message.edit_text("❌ آگهی یافت نشد.")
+        return
+    if ad.get('status') == 'sold':
+        await query.message.edit_text(f"ℹ️ آگهی {ad_id} از قبل «فروخته‌شده» ثبت شده بود.")
+        return
+
+    # قیمت مؤثر (با تخفیف فعال اگر باشد)
+    ad_price = ad.get('price')
+    if ad.get('discount_history'):
+        for disc in reversed(ad['discount_history']):
+            if disc.get('is_active', True):
+                ad_price = disc.get('new_price', ad_price)
+                break
+    if ad_price is None:
+        ad_price = 0
+
+    # زمان تا فروش
+    days_text = "همان روز"
+    publish_date = ad.get('publish_date')
+    if publish_date:
+        try:
+            diff = datetime.now() - datetime.strptime(publish_date, "%Y-%m-%d %H:%M:%S")
+            days, hours, minutes = diff.days, diff.seconds // 3600, (diff.seconds % 3600) // 60
+            if days > 0:
+                days_text = f"{days} روز و {hours} ساعت"
+            elif hours > 0:
+                days_text = f"{hours} ساعت و {minutes} دقیقه"
+            else:
+                days_text = f"{minutes} دقیقه"
+        except Exception:
+            pass
+
+    sold_time = now_jalali()
+    seller_note = escape_html(ad.get('seller_note', '-'))
+
+    new_post_text = f"""❌ <b>فروخته شد!</b>
+
+🎮 <b>آگهی فروش اکانت پلاتو</b>
+
+🆔 شناسه: {ad_id}
+
+⭐ ویپ: {ad.get('vip_count', '-')}
+📊 آیتم: {ad.get('item_count', '-')}
+🪙 سکه: {ad.get('coin_count', '-')}
+💰 پیپ: {ad.get('pip_count', '-')}
+🏆 وین: {ad.get('win_count', '-')}
+📅 سن اکانت: {ad.get('account_age', '-')}
+💵 قیمت: <s>{ad_price:,}</s> <b>{ad_price:,}</b> تومان ❌
+
+📝 توضیحات:
+{seller_note}
+
+━━━━━━━━━━━━━━━━━━━━
+⏱ زمان تا فروش: {days_text}
+📅 تاریخ فروش: {sold_time}
+{SIGNATURE}"""
+
+    reply_text = f"""❌ <b>فروخته شد</b> ❌
+
+🆔 شناسه: {ad_id}
+💰 قیمت نهایی: {ad_price:,} تومان
+⏱ زمان تا فروش: {days_text}
+📅 تاریخ فروش: {sold_time}
+
+🤖 ربات: {BOT_USERNAME}"""
+
+    async def _apply(chat_id, post_key, button_key, sold_reply_key):
+        post_id = ad.get(post_key)
+        if not post_id:
+            return
+        try:
+            if ad.get('profile_photo') or ad.get('games_photo') or ad.get('video'):
+                await context.bot.edit_message_caption(chat_id=chat_id, message_id=post_id, caption=new_post_text, parse_mode="HTML", reply_markup=None)
+            else:
+                await context.bot.edit_message_text(chat_id=chat_id, message_id=post_id, text=new_post_text, parse_mode="HTML", reply_markup=None)
+            if ad.get(button_key):
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=ad[button_key])
+                except Exception:
+                    pass
+            _sr = await context.bot.send_message(chat_id=chat_id, text=reply_text, reply_to_message_id=post_id, parse_mode="HTML")
+            ad[sold_reply_key] = _sr.message_id
+        except Exception as e:
+            logger.error(f"ثبت فروش دستی در چنل ناموفق: {e}")
+
+    await _apply(GAME_CHANNEL_ID, 'game_channel_post_id', 'game_channel_button_id', 'game_sold_reply_id')
+    await _apply(MAIN_CHANNEL_ID, 'channel_post_id', 'channel_button_id', 'channel_sold_reply_id')
+
+    ad['status'] = 'sold'
+    ad['sold_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ad['days_to_sell'] = days_text
+    ad['sold_manual'] = True
+    save_agahi(all_agahi)
+
+    await query.message.edit_text(
+        f"✅ آگهی {ad_id} به‌صورت دستی «فروخته شد» ثبت شد و پست کانال‌ها به‌روزرسانی شد.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))
+    try:
+        await context.bot.send_message(chat_id=seller_id, text=f"✅ آگهی {ad_id} شما به‌عنوان «فروخته‌شده» ثبت شد.\n🤖 ربات: {BOT_USERNAME}")
+    except Exception:
+        pass

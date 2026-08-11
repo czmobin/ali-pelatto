@@ -28,7 +28,7 @@ _PERM_PREFIXES = (
              "reject_ad_", "reject_fake_", "reject_info_", "reject_violation_", "reject_other_",
              "price_set_", "reject_price_only_", "confirm_sale_", "reject_sale_", "revert_sale_",
              "approve_discount_", "reject_discount_", "approveprop_", "rejectprop_",
-             "ap_editad", "aded_")),
+             "ap_editad", "aded_", "ap_soldyes_")),
     ("shop", ("shoporder_done_", "shoporder_reject_")),
     ("wallet", ("confirm_charge_", "reject_charge_", "withdraw_approve_", "withdraw_reject_")),
 )
@@ -165,6 +165,12 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data == "ap_pages":
         await ap_pages(update, context)
+        return
+    if data.startswith("ap_soldyes_"):
+        await admin_mark_sold(update, context)
+        return
+    if data.startswith("ap_sold_"):
+        await ap_sold_confirm(update, context)
         return
     if data.startswith("ap_setedit_"):
         await ap_setting_edit_prompt(update, context)

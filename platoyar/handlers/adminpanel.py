@@ -253,9 +253,12 @@ async def ap_process_adsearch(update: Update, context: ContextTypes.DEFAULT_TYPE
                                         reply_markup=InlineKeyboardMarkup(_back_kb()))
         return
     owner = ad.get("user_id")
+    is_sold = ad.get('status') == 'sold'
+    status_line = "🔴 فروخته‌شده" if is_sold else f"🟢 {where}"
     lines = [
         f"📢 <b>آگهی {aid}</b> ({where})",
         "━━━━━━━━━━━━━━━━━━━━",
+        f"وضعیت: {status_line}",
         f"⭐ ویپ: {ad.get('vip_count','-')} | 📊 آیتم: {ad.get('item_count','-')}",
         f"🪙 سکه: {ad.get('coin_count','-')} | 💰 پیپ: {ad.get('pip_count','-')}",
         f"🏆 وین: {ad.get('win_count','-')} | 📅 سن: {ad.get('account_age','-')}",
@@ -264,9 +267,26 @@ async def ap_process_adsearch(update: Update, context: ContextTypes.DEFAULT_TYPE
         "━━━━━━━━━━━━━━━━━━━━",
         f"👤 مالک: <code>{owner}</code>",
     ]
-    kb = [[InlineKeyboardButton("👤 اطلاعات کامل مالک", callback_data=f"ap_owner_{owner}")]] + _back_kb()
+    kb = []
+    # فقط برای آگهی منتشرشده‌ی فروخته‌نشده و ادمینی که دسترسی «آگهی» دارد
+    if where == "منتشرشده" and not is_sold and has_perm(update.effective_user.id, 'ads'):
+        kb.append([InlineKeyboardButton("✅ ثبت فروش دستی (فروخته شد)", callback_data=f"ap_sold_{aid}")])
+    kb.append([InlineKeyboardButton("👤 اطلاعات کامل مالک", callback_data=f"ap_owner_{owner}")])
+    kb += _back_kb()
     await update.message.reply_text("\n".join(lines), parse_mode="HTML",
                                     reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def ap_sold_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update):
+        await update.callback_query.answer()
+        return
+    aid = update.callback_query.data[len("ap_sold_"):]
+    await _show(update,
+                f"❓ آیا آگهی <code>{aid}</code> را به‌صورت دستی «فروخته شد» ثبت کنم؟\n\n"
+                "⚠️ کپشن پست کانال ویرایش می‌شود و دکمه‌ی خرید حذف می‌شود.",
+                [[InlineKeyboardButton("✅ بله، فروخته شد", callback_data=f"ap_soldyes_{aid}")],
+                 [InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")]])
 
 
 async def ap_owner_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
