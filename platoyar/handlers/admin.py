@@ -1230,3 +1230,116 @@ async def editad_menu_again(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text("❌ آگهی یافت نشد.")
         return
     await _show_ad_editor(query.message, ad_id, ad, kind)
+
+
+# ============================================================
+# ثبت آگهی دستی توسط ادمین (بدون فرم مرحله‌ای): پست + قیمت → انتشار
+# ============================================================
+async def admin_manual_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not has_perm(update.effective_user.id, 'ads'):
+        await query.answer("⛔ دسترسی ندارید", show_alert=True)
+        return
+    context.user_data.clear()
+    context.user_data['admin_manual_ad'] = 'waiting_post'
+    context.user_data['manual_ad_data'] = {}
+    await query.message.edit_text(
+        "➕ <b>ثبت آگهی دستی</b>\n\n"
+        "پستِ آگهی را بفرست: یک <b>عکس</b> یا <b>ویدیو</b> همراه با <b>متن کامل (کپشن)</b> — "
+        "یا فقط متن. عیناً همون چیزی که می‌خوای توی کانال منتشر بشه.\n\n"
+        "بعدش فقط <b>قیمت</b> رو می‌پرسم و مستقیم منتشر می‌کنم (هیچ سؤال دیگه‌ای نیست).",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")]]))
+
+
+async def admin_manual_ad_receive_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    data = context.user_data.get('manual_ad_data', {})
+    caption = (msg.caption or msg.text or "").strip()
+    if msg.photo:
+        data['media_type'] = 'photo'
+        data['media_file_id'] = msg.photo[-1].file_id
+    elif msg.video:
+        data['media_type'] = 'video'
+        data['media_file_id'] = msg.video.file_id
+    else:
+        data['media_type'] = None
+        data['media_file_id'] = None
+    if not caption and not data.get('media_file_id'):
+        await msg.reply_text("❌ چیزی دریافت نشد. یک عکس/ویدیو با کپشن یا یک متن بفرست.")
+        return
+    data['caption'] = caption
+    context.user_data['manual_ad_data'] = data
+    context.user_data['admin_manual_ad'] = 'waiting_price'
+    await msg.reply_text(
+        "✅ پست دریافت شد.\n\n💵 حالا فقط <b>قیمت</b> را به تومان بفرست (فقط عدد):",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")]]))
+
+
+async def admin_manual_ad_receive_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw = (update.message.text or "").replace(",", "").replace("،", "").strip()
+    if not raw.isdigit():
+        await update.message.reply_text("❌ قیمت نامعتبر. فقط عدد بفرست.")
+        return
+    price = int(raw)
+    data = context.user_data.get('manual_ad_data', {})
+    context.user_data.pop('admin_manual_ad', None)
+    context.user_data.pop('manual_ad_data', None)
+
+    admin_id = update.effective_user.id
+    ad_id = get_next_ad_id()
+    # رنگ خودکار بر اساس قیمت: زیر ۱۰ میلیون سبز، بالای آن آبی
+    color = 'green' if price < 10_000_000 else 'blue'
+    emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}[color]
+    style = {"green": "success", "red": "danger", "blue": "primary"}[color]
+    bot_username = (await context.bot.get_me()).username
+    caption = data.get('caption', '')
+    post_text = f"{caption}\n{SIGNATURE}" if caption else f"🎮 <b>آگهی فروش اکانت پلاتو</b>\n{SIGNATURE}"
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
+        f"{emoji} اطلاعات بیشتر و خرید",
+        url=f"https://t.me/{bot_username}?start=buy_{ad_id}", style=style)]])
+    mt = data.get('media_type')
+    fid = data.get('media_file_id')
+
+    ad = {
+        'id': ad_id, 'user_id': admin_id, 'price': price,
+        'seller_note': caption, 'button_color': color,
+        'published': True, 'status': 'published',
+        'publish_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        'manual': True,
+    }
+    if mt == 'photo':
+        ad['profile_photo'] = fid
+    elif mt == 'video':
+        ad['video'] = fid
+
+    async def _post(chat_id):
+        if mt == 'photo':
+            sent = await context.bot.send_photo(chat_id=chat_id, photo=fid, caption=post_text, reply_markup=keyboard, parse_mode="HTML")
+        elif mt == 'video':
+            sent = await context.bot.send_video(chat_id=chat_id, video=fid, caption=post_text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            sent = await context.bot.send_message(chat_id=chat_id, text=post_text, reply_markup=keyboard, parse_mode="HTML")
+        return sent.message_id, [sent.message_id]
+
+    try:
+        ad['game_channel_post_id'], ad['game_channel_media_ids'] = await _post(GAME_CHANNEL_ID)
+        ad['game_channel_button_id'] = None
+        ad['channel_post_id'], ad['channel_media_ids'] = await _post(MAIN_CHANNEL_ID)
+        ad['channel_button_id'] = None
+    except Exception as e:
+        await update.message.reply_text(f"❌ خطا در انتشار: {e}\n(اگر کپشن خیلی بلند بود، کوتاه‌ترش کن)")
+        return
+
+    all_agahi = load_agahi()
+    all_agahi.setdefault(str(admin_id), []).append(ad)
+    save_agahi(all_agahi)
+
+    await update.message.reply_text(
+        f"✅ آگهی دستی با شناسه <b>{ad_id}</b> منتشر شد (کانال بازی + اصلی).\n"
+        f"💵 قیمت: {price:,} تومان | 🎨 رنگ دکمه: {emoji}\n"
+        f"خرید از طریق دکمه‌ی زیر پست انجام می‌شود.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))

@@ -166,6 +166,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "ap_pages":
         await ap_pages(update, context)
         return
+    if data == "admin_manual_ad":
+        await admin_manual_ad_start(update, context)
+        return
     if data.startswith("ap_soldyes_"):
         await admin_mark_sold(update, context)
         return
@@ -374,6 +377,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if context.user_data.get('ap_editad'):
         await editad_field_process(update, context)
+        return
+    if context.user_data.get('admin_manual_ad') == 'waiting_post':
+        await admin_manual_ad_receive_post(update, context)
+        return
+    if context.user_data.get('admin_manual_ad') == 'waiting_price':
+        await admin_manual_ad_receive_price(update, context)
         return
 
     if context.user_data.get('reject_other_ad_id'):

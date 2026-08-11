@@ -70,6 +70,9 @@ def _panel_keyboard(update=None):
          InlineKeyboardButton("✉️ پیام به یک کاربر", callback_data="ap_sendone")],
         [InlineKeyboardButton("✏️ ویرایش آگهی", callback_data="ap_editad")],
     ]
+    # ثبت آگهی دستی فقط برای ادمینِ دارای نقش «آگهی»
+    if update is not None and update.effective_user and has_perm(update.effective_user.id, 'ads'):
+        rows.append([InlineKeyboardButton("➕ ثبت آگهی دستی", callback_data="admin_manual_ad")])
     # فقط سوپرادمین دکمه‌های مدیریت ادمین و دیتابیس را می‌بیند
     if update is not None and update.effective_user and update.effective_user.id == SUPER_ADMIN_ID:
         rows.append([InlineKeyboardButton("👮 مدیریت ادمین‌ها", callback_data="ap_admins"),
@@ -87,7 +90,8 @@ def _clear_ap_flags(context):
     for k in ("ap_waiting_user_id", "ap_waiting_broadcast",
               "ap_waiting_sendone_id", "ap_waiting_sendone_text", "ap_waiting_adsearch",
               "ap_waiting_admin_id", "ap_waiting_setting",
-              "ap_waiting_editad_id", "ap_editad"):
+              "ap_waiting_editad_id", "ap_editad",
+              "admin_manual_ad", "manual_ad_data"):
         context.user_data.pop(k, None)
 
 
