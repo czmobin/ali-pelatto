@@ -1254,37 +1254,85 @@ async def admin_manual_ad_start(update: Update, context: ContextTypes.DEFAULT_TY
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")]]))
 
 
+def _manual_channel_kb():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ هر دو کانال", callback_data="manual_ch_both")],
+        [InlineKeyboardButton("📢 فقط کانال آگهی (پلاتویار)", callback_data="manual_ch_game")],
+        [InlineKeyboardButton("🏪 فقط کانال اصلی (فروشگاه)", callback_data="manual_ch_main")],
+        [InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")],
+    ])
+
+
+async def admin_manual_shop_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if not has_perm(update.effective_user.id, 'shop'):
+        await query.answer("⛔ دسترسی ندارید", show_alert=True)
+        return
+    context.user_data.clear()
+    context.user_data['admin_manual_ad'] = 'collecting'
+    context.user_data['manual_ad_data'] = {'media': [], 'caption': '', 'mode': 'shop'}
+    await query.message.edit_text(
+        "🛍 <b>محصول دستی فروشگاه</b>\n\n"
+        "۱️⃣ عکس(ها) و ویدیوی محصول را بفرست (مثلاً اکانت چت‌جی‌پی‌تی، آیتم شاپ پلاتو و...).\n"
+        "۲️⃣ کپشن رو روی یکی از رسانه‌ها یا جدا به‌صورت متن بفرست.\n"
+        "۳️⃣ <b>قیمت</b> (عدد) رو بفرست.\n"
+        "۴️⃣ آیدی <b>پیوی</b> برای خرید رو می‌پرسم (دکمه‌ی خرید به همون پیوی وصل می‌شه، نه ربات).\n\n"
+        "این آگهی شناسه/آیدی ربات ندارد.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")]]))
+
+
 async def admin_manual_ad_collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """جمع‌آوری رسانه‌ها و کپشن. با فرستادن قیمت (عدد) منتشر می‌شود."""
+    """جمع‌آوری رسانه‌ها و کپشن. با فرستادن قیمت (عدد) منتشر می‌شود.
+    برای حالت فروشگاه، بعد از قیمت آیدی پیوی هم گرفته می‌شود."""
     msg = update.message
     data = context.user_data.setdefault('manual_ad_data', {'media': [], 'caption': ''})
     data.setdefault('media', [])
+
+    # حالت فروشگاه: منتظر آیدی پیوی
+    if data.get('awaiting') == 'pv':
+        pv = (msg.text or "").strip()
+        if not pv:
+            await msg.reply_text("❌ آیدی پیوی رو به‌صورت متن بفرست (مثل <code>@username</code> یا <code>t.me/username</code> یا آیدی عددی).", parse_mode="HTML")
+            return
+        data['pv'] = pv
+        data.pop('awaiting', None)
+        context.user_data['manual_ad_data'] = data
+        await msg.reply_text(
+            f"✅ پیوی خرید تنظیم شد: {escape_html(pv)}\n\nاین محصول در کدام کانال‌ها منتشر شود؟",
+            parse_mode="HTML", reply_markup=_manual_channel_kb())
+        return
+
     if msg.caption:
         data['caption'] = msg.caption.strip()
     if msg.photo:
         data['media'].append({'type': 'photo', 'file_id': msg.photo[-1].file_id})
-        await msg.reply_text(f"🖼 عکس دریافت شد (تعداد رسانه: {len(data['media'])}).\nبقیه رسانه‌ها رو بفرست، یا <b>قیمت (عدد)</b> رو بفرست تا منتشر بشه.", parse_mode="HTML")
+        await msg.reply_text(f"🖼 عکس دریافت شد (تعداد رسانه: {len(data['media'])}).\nبقیه رسانه‌ها رو بفرست، یا <b>قیمت (عدد)</b> رو بفرست.", parse_mode="HTML")
         return
     if msg.video:
         data['media'].append({'type': 'video', 'file_id': msg.video.file_id})
-        await msg.reply_text(f"🎬 ویدیو دریافت شد (تعداد رسانه: {len(data['media'])}).\nبقیه رسانه‌ها رو بفرست، یا <b>قیمت (عدد)</b> رو بفرست تا منتشر بشه.", parse_mode="HTML")
+        await msg.reply_text(f"🎬 ویدیو دریافت شد (تعداد رسانه: {len(data['media'])}).\nبقیه رسانه‌ها رو بفرست، یا <b>قیمت (عدد)</b> رو بفرست.", parse_mode="HTML")
         return
     text = (msg.text or "").strip()
     num = text.replace(",", "").replace("،", "")
     if num.isdigit():
-        # قیمت گرفته شد؛ حالا بپرس در کدام کانال‌ها منتشر شود
         data['price'] = int(num)
         context.user_data['manual_ad_data'] = data
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ هر دو کانال", callback_data="manual_ch_both")],
-            [InlineKeyboardButton("📢 فقط کانال آگهی (پلاتویار)", callback_data="manual_ch_game")],
-            [InlineKeyboardButton("🏪 فقط کانال اصلی (فروشگاه)", callback_data="manual_ch_main")],
-            [InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")],
-        ])
+        # حالت فروشگاه: قبل از کانال، آیدی پیوی رو بپرس
+        if data.get('mode') == 'shop':
+            data['awaiting'] = 'pv'
+            await msg.reply_text(
+                f"💵 قیمت: <b>{int(num):,}</b> تومان\n\n"
+                "🛒 حالا آیدی <b>پیوی</b> که خریدار برای خرید باید بره رو بفرست "
+                "(مثل <code>@username</code> یا <code>t.me/username</code> یا آیدی عددی).\n"
+                "دکمه‌ی «خرید» به همون پیوی وصل می‌شه.",
+                parse_mode="HTML")
+            return
         await msg.reply_text(
             f"💵 قیمت: <b>{int(num):,}</b> تومان\n🖼 تعداد رسانه: {len(data.get('media', []))}\n\n"
             "این آگهی در کدام کانال‌ها منتشر شود؟",
-            parse_mode="HTML", reply_markup=kb)
+            parse_mode="HTML", reply_markup=_manual_channel_kb())
         return
     if text:
         data['caption'] = text
@@ -1293,40 +1341,65 @@ async def admin_manual_ad_collect(update: Update, context: ContextTypes.DEFAULT_
     await msg.reply_text("❌ چیزی دریافت نشد. عکس/ویدیو یا متن بفرست، و در آخر قیمت (عدد).")
 
 
+def _pv_to_url(pv):
+    """آیدی/لینک پیوی را به URL قابل‌استفاده در دکمه تبدیل می‌کند."""
+    pv = (pv or "").strip()
+    if not pv:
+        return "https://t.me/"
+    if pv.startswith(("http://", "https://", "tg://")):
+        return pv
+    if pv.startswith(("t.me/", "telegram.me/")):
+        return "https://" + pv
+    core = pv.lstrip("@")
+    if core.isdigit():
+        return f"tg://user?id={core}"
+    return f"https://t.me/{core}"
+
+
 async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, data, price, targets=('game', 'main')):
     media = data.get('media', [])
     caption = data.get('caption', '')
+    mode = data.get('mode', 'ad')
+    pv = data.get('pv')
     context.user_data.pop('admin_manual_ad', None)
     context.user_data.pop('manual_ad_data', None)
 
     admin_id = update.effective_user.id
-    ad_id = get_next_ad_id()
-    # رنگ خودکار بر اساس قیمت: زیر ۱۰ میلیون سبز، بالای آن آبی
-    color = 'green' if price < 10_000_000 else 'blue'
-    emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}[color]
-    style = {"green": "success", "red": "danger", "blue": "primary"}[color]
     bot_username = (await context.bot.get_me()).username
-    post_text = f"{caption}\n{SIGNATURE}" if caption else f"🎮 <b>آگهی فروش اکانت پلاتو</b>\n{SIGNATURE}"
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
-        f"{emoji} اطلاعات بیشتر و خرید",
-        url=f"https://t.me/{bot_username}?start=buy_{ad_id}", style=style)]])
+    ad = None
+    emoji = "🛒"
 
-    ad = {
-        'id': ad_id, 'user_id': admin_id, 'price': price,
-        'seller_note': caption, 'button_color': color,
-        'published': True, 'status': 'published',
-        'publish_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        'manual': True,
-    }
-    # نگاشت رسانه‌ها به فیلدهای استاندارد (برای فروش/کنسل/حذف)
-    photos = [m['file_id'] for m in media if m['type'] == 'photo']
-    videos = [m['file_id'] for m in media if m['type'] == 'video']
-    if len(photos) >= 1:
-        ad['profile_photo'] = photos[0]
-    if len(photos) >= 2:
-        ad['games_photo'] = photos[1]
-    if videos:
-        ad['video'] = videos[0]
+    if mode == 'shop':
+        # محصول فروشگاه: دکمه به پیوی، بدون شناسه و امضای ربات؛ در دیتابیس ذخیره نمی‌شود
+        buy_url = _pv_to_url(pv)
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🛒 خرید / اطلاعات بیشتر", url=buy_url)]])
+        price_line = f"\n\n💵 قیمت: <b>{price:,}</b> تومان" if price else ""
+        post_text = (caption + price_line) if caption else (f"🛍 <b>محصول فروشگاه</b>{price_line}")
+    else:
+        ad_id = get_next_ad_id()
+        color = 'green' if price < 10_000_000 else 'blue'
+        emoji = {"green": "🟢", "red": "🔴", "blue": "🔵"}[color]
+        style = {"green": "success", "red": "danger", "blue": "primary"}[color]
+        post_text = f"{caption}\n{SIGNATURE}" if caption else f"🎮 <b>آگهی فروش اکانت پلاتو</b>\n{SIGNATURE}"
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(
+            f"{emoji} اطلاعات بیشتر و خرید",
+            url=f"https://t.me/{bot_username}?start=buy_{ad_id}", style=style)]])
+        ad = {
+            'id': ad_id, 'user_id': admin_id, 'price': price,
+            'seller_note': caption, 'button_color': color,
+            'published': True, 'status': 'published',
+            'publish_date': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'manual': True,
+        }
+        # نگاشت رسانه‌ها به فیلدهای استاندارد (برای فروش/کنسل/حذف)
+        photos = [m['file_id'] for m in media if m['type'] == 'photo']
+        videos = [m['file_id'] for m in media if m['type'] == 'video']
+        if len(photos) >= 1:
+            ad['profile_photo'] = photos[0]
+        if len(photos) >= 2:
+            ad['games_photo'] = photos[1]
+        if videos:
+            ad['video'] = videos[0]
 
     async def _post(chat_id):
         if len(media) >= 2:
@@ -1340,7 +1413,7 @@ async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE,
                     mg.append(InputMediaPhoto(media=m['file_id'], caption=cap, parse_mode=pm))
             sent = await context.bot.send_media_group(chat_id=chat_id, media=mg)
             btn = await context.bot.send_message(
-                chat_id=chat_id, text="👆 برای مشاهده‌ی کامل و خرید این اکانت، دکمه‌ی زیر را بزنید:",
+                chat_id=chat_id, text="👆 برای خرید / اطلاعات بیشتر، دکمه‌ی زیر را بزنید:",
                 reply_markup=keyboard, reply_to_message_id=sent[0].message_id)
             return sent[0].message_id, btn.message_id, [m.message_id for m in sent]
         elif len(media) == 1:
@@ -1356,38 +1429,47 @@ async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     try:
         if 'game' in targets:
-            ad['game_channel_post_id'], ad['game_channel_button_id'], ad['game_channel_media_ids'] = await _post(GAME_CHANNEL_ID)
+            g_post, g_btn, g_media = await _post(GAME_CHANNEL_ID)
+            if ad is not None:
+                ad['game_channel_post_id'], ad['game_channel_button_id'], ad['game_channel_media_ids'] = g_post, g_btn, g_media
         if 'main' in targets:
-            ad['channel_post_id'], ad['channel_button_id'], ad['channel_media_ids'] = await _post(MAIN_CHANNEL_ID)
+            m_post, m_btn, m_media = await _post(MAIN_CHANNEL_ID)
+            if ad is not None:
+                ad['channel_post_id'], ad['channel_button_id'], ad['channel_media_ids'] = m_post, m_btn, m_media
     except Exception as e:
         await context.bot.send_message(chat_id=admin_id, text=f"❌ خطا در انتشار: {e}\n(اگر کپشن خیلی بلند بود کوتاه‌ترش کن)")
         return
 
-    all_agahi = load_agahi()
-    all_agahi.setdefault(str(admin_id), []).append(ad)
-    save_agahi(all_agahi)
+    if ad is not None:
+        all_agahi = load_agahi()
+        all_agahi.setdefault(str(admin_id), []).append(ad)
+        save_agahi(all_agahi)
 
     ch_label = {'game': 'کانال آگهی (پلاتویار)', 'main': 'کانال اصلی (فروشگاه)'}
     where = "، ".join(ch_label[t] for t in targets if t in ch_label)
+    if mode == 'shop':
+        head = f"✅ <b>محصول فروشگاه</b> منتشر شد (بدون شناسه).\n🛒 دکمه‌ی خرید → پیوی: {escape_html(str(pv))}"
+    else:
+        head = f"✅ آگهی دستی با شناسه <b>{ad['id']}</b> منتشر شد."
     await context.bot.send_message(
         chat_id=admin_id,
-        text=(f"✅ آگهی دستی با شناسه <b>{ad_id}</b> منتشر شد.\n"
-              f"📢 کانال: {where}\n"
-              f"🖼 تعداد رسانه: {len(media)} | 💵 قیمت: {price:,} تومان | 🎨 رنگ دکمه: {emoji}"),
+        text=(f"{head}\n📢 کانال: {where}\n"
+              f"🖼 تعداد رسانه: {len(media)} | 💵 قیمت: {price:,} تومان"),
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))
 
 
 async def admin_manual_ad_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """انتخاب کانال(ها) برای انتشار آگهی دستی، سپس انتشار."""
+    """انتخاب کانال(ها) برای انتشار آگهی/محصول دستی، سپس انتشار."""
     query = update.callback_query
     await query.answer()
-    if not has_perm(update.effective_user.id, 'ads'):
-        await query.answer("⛔ دسترسی ندارید", show_alert=True)
-        return
     data = context.user_data.get('manual_ad_data')
     if not data or 'price' not in data:
-        await query.message.edit_text("❌ اطلاعات آگهی پیدا نشد. دوباره از «➕ ثبت آگهی دستی» شروع کن.")
+        await query.message.edit_text("❌ اطلاعات پیدا نشد. دوباره از پنل شروع کن.")
+        return
+    need = 'shop' if data.get('mode') == 'shop' else 'ads'
+    if not has_perm(update.effective_user.id, need):
+        await query.answer("⛔ دسترسی ندارید", show_alert=True)
         return
     choice = query.data.split("_")[-1]  # both | game | main
     targets = {'both': ('game', 'main'), 'game': ('game',), 'main': ('main',)}.get(choice, ('game', 'main'))

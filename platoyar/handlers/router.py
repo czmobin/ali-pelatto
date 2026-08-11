@@ -28,7 +28,7 @@ _PERM_PREFIXES = (
              "reject_ad_", "reject_fake_", "reject_info_", "reject_violation_", "reject_other_",
              "price_set_", "reject_price_only_", "confirm_sale_", "reject_sale_", "revert_sale_",
              "approve_discount_", "reject_discount_", "approveprop_", "rejectprop_",
-             "ap_editad", "aded_", "ap_soldyes_", "manual_ch_")),
+             "ap_editad", "aded_", "ap_soldyes_")),
     ("shop", ("shoporder_done_", "shoporder_reject_")),
     ("wallet", ("confirm_charge_", "reject_charge_", "withdraw_approve_", "withdraw_reject_")),
 )
@@ -168,6 +168,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if data == "admin_manual_ad":
         await admin_manual_ad_start(update, context)
+        return
+    if data == "admin_manual_shop":
+        await admin_manual_shop_start(update, context)
         return
     if data.startswith("manual_ch_"):
         await admin_manual_ad_channel(update, context)
