@@ -1272,7 +1272,19 @@ async def admin_manual_ad_collect(update: Update, context: ContextTypes.DEFAULT_
     text = (msg.text or "").strip()
     num = text.replace(",", "").replace("،", "")
     if num.isdigit():
-        await _publish_manual_ad(update, context, data, int(num))
+        # قیمت گرفته شد؛ حالا بپرس در کدام کانال‌ها منتشر شود
+        data['price'] = int(num)
+        context.user_data['manual_ad_data'] = data
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ هر دو کانال", callback_data="manual_ch_both")],
+            [InlineKeyboardButton("📢 فقط کانال آگهی (پلاتویار)", callback_data="manual_ch_game")],
+            [InlineKeyboardButton("🏪 فقط کانال اصلی (فروشگاه)", callback_data="manual_ch_main")],
+            [InlineKeyboardButton("🔙 انصراف", callback_data="admin_panel")],
+        ])
+        await msg.reply_text(
+            f"💵 قیمت: <b>{int(num):,}</b> تومان\n🖼 تعداد رسانه: {len(data.get('media', []))}\n\n"
+            "این آگهی در کدام کانال‌ها منتشر شود؟",
+            parse_mode="HTML", reply_markup=kb)
         return
     if text:
         data['caption'] = text
@@ -1281,7 +1293,7 @@ async def admin_manual_ad_collect(update: Update, context: ContextTypes.DEFAULT_
     await msg.reply_text("❌ چیزی دریافت نشد. عکس/ویدیو یا متن بفرست، و در آخر قیمت (عدد).")
 
 
-async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, data, price):
+async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, data, price, targets=('game', 'main')):
     media = data.get('media', [])
     caption = data.get('caption', '')
     context.user_data.pop('admin_manual_ad', None)
@@ -1343,18 +1355,41 @@ async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE,
             return sent.message_id, None, [sent.message_id]
 
     try:
-        ad['game_channel_post_id'], ad['game_channel_button_id'], ad['game_channel_media_ids'] = await _post(GAME_CHANNEL_ID)
-        ad['channel_post_id'], ad['channel_button_id'], ad['channel_media_ids'] = await _post(MAIN_CHANNEL_ID)
+        if 'game' in targets:
+            ad['game_channel_post_id'], ad['game_channel_button_id'], ad['game_channel_media_ids'] = await _post(GAME_CHANNEL_ID)
+        if 'main' in targets:
+            ad['channel_post_id'], ad['channel_button_id'], ad['channel_media_ids'] = await _post(MAIN_CHANNEL_ID)
     except Exception as e:
-        await update.message.reply_text(f"❌ خطا در انتشار: {e}\n(اگر کپشن خیلی بلند بود کوتاه‌ترش کن)")
+        await context.bot.send_message(chat_id=admin_id, text=f"❌ خطا در انتشار: {e}\n(اگر کپشن خیلی بلند بود کوتاه‌ترش کن)")
         return
 
     all_agahi = load_agahi()
     all_agahi.setdefault(str(admin_id), []).append(ad)
     save_agahi(all_agahi)
 
-    await update.message.reply_text(
-        f"✅ آگهی دستی با شناسه <b>{ad_id}</b> منتشر شد (کانال بازی + اصلی).\n"
-        f"🖼 تعداد رسانه: {len(media)} | 💵 قیمت: {price:,} تومان | 🎨 رنگ دکمه: {emoji}",
+    ch_label = {'game': 'کانال آگهی (پلاتویار)', 'main': 'کانال اصلی (فروشگاه)'}
+    where = "، ".join(ch_label[t] for t in targets if t in ch_label)
+    await context.bot.send_message(
+        chat_id=admin_id,
+        text=(f"✅ آگهی دستی با شناسه <b>{ad_id}</b> منتشر شد.\n"
+              f"📢 کانال: {where}\n"
+              f"🖼 تعداد رسانه: {len(media)} | 💵 قیمت: {price:,} تومان | 🎨 رنگ دکمه: {emoji}"),
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 پنل مدیریت", callback_data="admin_panel")]]))
+
+
+async def admin_manual_ad_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """انتخاب کانال(ها) برای انتشار آگهی دستی، سپس انتشار."""
+    query = update.callback_query
+    await query.answer()
+    if not has_perm(update.effective_user.id, 'ads'):
+        await query.answer("⛔ دسترسی ندارید", show_alert=True)
+        return
+    data = context.user_data.get('manual_ad_data')
+    if not data or 'price' not in data:
+        await query.message.edit_text("❌ اطلاعات آگهی پیدا نشد. دوباره از «➕ ثبت آگهی دستی» شروع کن.")
+        return
+    choice = query.data.split("_")[-1]  # both | game | main
+    targets = {'both': ('game', 'main'), 'game': ('game',), 'main': ('main',)}.get(choice, ('game', 'main'))
+    await query.message.edit_text("⏳ در حال انتشار...")
+    await _publish_manual_ad(update, context, data, data['price'], targets)
