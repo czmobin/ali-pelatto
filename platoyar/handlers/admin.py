@@ -623,8 +623,8 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
                 reply_markup=keyboard,
                 reply_to_message_id=sent[0].message_id,
             )
-            # (post_id, button_id) — دکمه روی پیام جداست
-            return sent[0].message_id, btn_msg.message_id
+            # (post_id, button_id, همه‌ی پیام‌های آلبوم) — دکمه روی پیام جداست
+            return sent[0].message_id, btn_msg.message_id, [m.message_id for m in sent]
         elif len(raw) == 1:
             kind, file_id = raw[0]
             if kind == 'video':
@@ -632,15 +632,15 @@ async def publish_ad(update: Update, context: ContextTypes.DEFAULT_TYPE, ad_id, 
             else:
                 sent = await context.bot.send_photo(chat_id=chat_id, photo=file_id, caption=post_text, reply_markup=keyboard, parse_mode="HTML")
             # دکمه روی خود پیام است؛ پیام دکمه‌ی جدا نداریم
-            return sent.message_id, None
+            return sent.message_id, None, [sent.message_id]
         else:
             sent = await context.bot.send_message(chat_id=chat_id, text=post_text, reply_markup=keyboard, parse_mode="HTML")
-            return sent.message_id, None
+            return sent.message_id, None, [sent.message_id]
 
     try:
-        ad['game_channel_post_id'], ad['game_channel_button_id'] = await _post_to_channel(GAME_CHANNEL_ID)
+        ad['game_channel_post_id'], ad['game_channel_button_id'], ad['game_channel_media_ids'] = await _post_to_channel(GAME_CHANNEL_ID)
         if publish_method == 'both':
-            ad['channel_post_id'], ad['channel_button_id'] = await _post_to_channel(MAIN_CHANNEL_ID)
+            ad['channel_post_id'], ad['channel_button_id'], ad['channel_media_ids'] = await _post_to_channel(MAIN_CHANNEL_ID)
         
         all_agahi = load_agahi()
         if str(ad['user_id']) not in all_agahi:

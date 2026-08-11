@@ -176,7 +176,8 @@ def _user_info_text(uid):
     ref_count = get_referral_count(uid)
     ref_by = get_referred_by(uid)
     blk = "بله ⛔" if int(uid) in load_blacklist() else "خیر ✅"
-    my_ads = [aid for aid, ad in agahi.items() if str(ad.get("user_id")) == uid]
+    # agahi با کلید user_id ذخیره می‌شود؛ آگهی‌های این کاربر همان لیستِ زیر کلیدِ uid است
+    my_ads = [a.get("id") for a in agahi.get(uid, []) if isinstance(a, dict)]
 
     lines = [
         f"👤 <b>اطلاعات کاربر</b> <code>{uid}</code>",
@@ -232,10 +233,21 @@ async def ap_adsearch_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def ap_process_adsearch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("ap_waiting_adsearch", None)
     aid = (update.message.text or "").strip()
-    agahi = load_agahi()
     pending = load_pending_ads()
-    ad = agahi.get(aid) or pending.get(aid)
-    where = "منتشرشده" if aid in agahi else ("در انتظار" if aid in pending else None)
+    agahi = load_agahi()
+    # pending با کلید ad_id ذخیره می‌شود؛ agahi با کلید user_id → باید داخل لیست‌ها بگردیم
+    ad, where = None, None
+    if aid in pending:
+        ad, where = pending[aid], "در انتظار"
+    else:
+        for _uid, ads in agahi.items():
+            if isinstance(ads, list):
+                for a in ads:
+                    if str(a.get("id")) == aid:
+                        ad, where = a, "منتشرشده"
+                        break
+            if ad:
+                break
     if not ad:
         await update.message.reply_text("❌ آگهی با این شناسه پیدا نشد.",
                                         reply_markup=InlineKeyboardMarkup(_back_kb()))

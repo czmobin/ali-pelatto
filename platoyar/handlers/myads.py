@@ -247,19 +247,32 @@ async def confirm_cancel_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text("❌ آگهی یافت نشد!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="my_ads_menu", style="primary")]]))
         return
     
-    # حذف از کانال‌ها
-    channel_post_id = ad.get('channel_post_id')
-    game_channel_post_id = ad.get('game_channel_post_id')
-    
-    if channel_post_id:
+    # حذف از کانال‌ها — همه‌ی پیام‌های آلبوم (عکس‌ها + ویدیو) و دکمه‌ی خرید، نه فقط پیام اول
+    def _channel_delete_ids(post_key, button_key, media_key):
+        ids = []
+        stored = ad.get(media_key)
+        if stored:
+            ids.extend(stored)
+        else:
+            # آگهی‌های قدیمی که media_ids ذخیره نشده: پیام‌های آلبوم پشت‌سرهم‌اند
+            pid = ad.get(post_key)
+            if pid:
+                n = sum(1 for k in ('profile_photo', 'games_photo', 'video') if ad.get(k))
+                ids.extend([pid + i for i in range(n)] if n >= 2 else [pid])
+        bid = ad.get(button_key)
+        if bid:
+            ids.append(bid)
+        return ids
+
+    for mid in _channel_delete_ids('game_channel_post_id', 'game_channel_button_id', 'game_channel_media_ids'):
         try:
-            await context.bot.delete_message(chat_id=MAIN_CHANNEL_ID, message_id=channel_post_id)
+            await context.bot.delete_message(chat_id=GAME_CHANNEL_ID, message_id=mid)
         except:
             pass
-    
-    if game_channel_post_id:
+
+    for mid in _channel_delete_ids('channel_post_id', 'channel_button_id', 'channel_media_ids'):
         try:
-            await context.bot.delete_message(chat_id=GAME_CHANNEL_ID, message_id=game_channel_post_id)
+            await context.bot.delete_message(chat_id=MAIN_CHANNEL_ID, message_id=mid)
         except:
             pass
     
@@ -342,7 +355,27 @@ async def request_discount_for_ad(update: Update, context: ContextTypes.DEFAULT_
     if not ad:
         await query.message.edit_text("❌ آگهی یافت نشد!")
         return
-    
+
+    # قفل تخفیف: تا N روز پس از انتشار، امکان درخواست تخفیف نیست
+    lock_days = get_setting('discount_lock_days', 4)
+    pd = ad.get('publish_date')
+    if lock_days and pd:
+        try:
+            unlock = datetime.strptime(pd, "%Y-%m-%d %H:%M:%S") + timedelta(days=int(lock_days))
+            now = datetime.now()
+            if now < unlock:
+                rem = unlock - now
+                d, h = rem.days, rem.seconds // 3600
+                await query.message.edit_text(
+                    f"⏳ <b>هنوز نمی‌توانید برای این آگهی تخفیف بگذارید.</b>\n\n"
+                    f"آگهی‌ها تا <b>{int(lock_days)} روز</b> پس از انتشار قابل تخفیف نیستند.\n"
+                    f"⌛ زمان باقی‌مانده: حدود <b>{d} روز و {h} ساعت</b>.\n{SIGNATURE}",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="request_discount_on_ad", style="primary")]]))
+                return
+        except Exception:
+            pass
+
     current_price = ad.get('price')
     discount_count = 0
     if ad.get('discount_history'):
