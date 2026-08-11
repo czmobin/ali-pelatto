@@ -387,13 +387,14 @@ async def receive_group_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
 {SIGNATURE}"""
     
     # متن ریپلای فروخته شد
-    reply_text = f"""❌ <b>فروخته شد!</b>
+    reply_text = f"""❌ <b>فروخته شد</b> ❌
 
 🆔 شناسه: {ad_id}
 💰 قیمت نهایی: {ad_price:,} تومان
 ⏱ زمان تا فروش: {days_text}
 📅 تاریخ فروش: {sold_time}
-{SIGNATURE}"""
+
+🤖 ربات: {BOT_USERNAME}"""
     
     # ویرایش پیام کانال بازی و حذف دکمه
     if game_channel_post_id:

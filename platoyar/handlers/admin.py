@@ -87,7 +87,13 @@ async def approve_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game_channel_post_id = ad.get('game_channel_post_id')
     
     try:
-        discount_notice = f"🎉 تخفیف ویژه!\n\nاین آگهی با تخفیف {discount_text} به قیمت {new_price:,} تومان تغییر کرد.\n{SIGNATURE}"
+        buy_link = f"https://t.me/{bot_username}?start=buy_{ad_id}"
+        discount_notice = (
+            f"🎉 <b>تخفیف اکانت</b>\n\n"
+            f"🆔 آگهی: <a href=\"{buy_link}\">{ad_id}</a>\n"
+            f"💰 قیمت جدید: <b>{new_price:,}</b> تومان\n\n"
+            f"🤖 ربات: {BOT_USERNAME}"
+        )
         
         if channel_post_id:
             try:
