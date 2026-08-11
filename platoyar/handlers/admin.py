@@ -1372,7 +1372,7 @@ async def _publish_manual_ad(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if mode == 'shop':
         # محصول فروشگاه: دکمه به پیوی، بدون شناسه و امضای ربات؛ در دیتابیس ذخیره نمی‌شود
         buy_url = _pv_to_url(pv)
-        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🛒 خرید / اطلاعات بیشتر", url=buy_url)]])
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 اطلاعات بیشتر و خرید", url=buy_url, style="success")]])
         price_line = f"\n\n💵 قیمت: <b>{price:,}</b> تومان" if price else ""
         post_text = (caption + price_line) if caption else (f"🛍 <b>محصول فروشگاه</b>{price_line}")
     else:
