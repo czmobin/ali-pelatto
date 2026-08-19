@@ -20,6 +20,7 @@ _ACTION_PREFIXES = (
     "withdraw_approve_", "withdraw_reject_", "confirm_sale_", "reject_sale_",
     "approve_discount_", "reject_discount_", "confirm_publish_",
     "propose_price_", "approveprop_", "rejectprop_", "revert_sale_",
+    "approve_priceup_", "reject_priceup_",
 )
 
 
@@ -28,6 +29,7 @@ _PERM_PREFIXES = (
              "reject_ad_", "reject_fake_", "reject_info_", "reject_violation_", "reject_other_",
              "price_set_", "reject_price_only_", "confirm_sale_", "reject_sale_", "revert_sale_",
              "approve_discount_", "reject_discount_", "approveprop_", "rejectprop_",
+             "approve_priceup_", "reject_priceup_",
              "ap_editad", "aded_", "ap_soldyes_")),
     ("shop", ("shoporder_done_", "shoporder_reject_")),
     ("wallet", ("confirm_charge_", "reject_charge_", "withdraw_approve_", "withdraw_reject_")),
@@ -300,6 +302,14 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await approve_discount(update, context)
     elif data.startswith("reject_discount_"):
         await reject_discount(update, context)
+    elif data.startswith("pricechg_up_"):
+        await pricechg_up_start(update, context)
+    elif data.startswith("pricechg_down_"):
+        await pricechg_down_start(update, context)
+    elif data.startswith("approve_priceup_"):
+        await approve_price_up(update, context)
+    elif data.startswith("reject_priceup_"):
+        await reject_price_up(update, context)
     elif data.startswith("select_color_"):
         ad_id = int(data.split("_")[2])
         await select_button_color(update, context, ad_id)
@@ -336,6 +346,9 @@ async def handle_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # پیام‌های بدون کاربر (پست کانال، ادمین ناشناس گروه) user_data ندارند → نادیده
+    if context.user_data is None or update.effective_user is None:
+        return
     # ---- فروشگاه ----
     if context.user_data.get('shop_order_reject'):
         await shop_order_reject_process(update, context)
@@ -452,6 +465,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if context.user_data.get('waiting_price_only_receipt'):
         await handle_price_only_receipt(update, context)
+        return
+    if context.user_data.get('waiting_pricechg_value'):
+        await process_pricechg_value(update, context)
         return
     if context.user_data.get('waiting_discount_value'):
         await process_discount_value(update, context)

@@ -89,7 +89,7 @@ async def approve_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         buy_link = f"https://t.me/{bot_username}?start=buy_{ad_id}"
         discount_notice = (
-            f"🎉 <b>تخفیف اکانت</b>\n\n"
+            f"💱 <b>تغییر قیمت اکانت</b>\n\n"
             f"🆔 آگهی: <a href=\"{buy_link}\">{ad_id}</a>\n"
             f"💰 قیمت جدید: <b>{new_price:,}</b> تومان\n\n"
             f"🤖 ربات: {BOT_USERNAME}"
@@ -155,6 +155,63 @@ async def reject_discount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if ad:
         user_id = ad['user_id']
         await context.bot.send_message(chat_id=user_id, text=f"❌ درخواست تخفیف شما برای آگهی {ad_id} رد شد.")
+
+
+async def approve_price_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تایید افزایش قیمت آگهی: فقط قیمت در پست چنل به‌روز می‌شود؛ بدون اعلان در چنل."""
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split('_')  # approve_priceup_<ad_id>_<new_price>
+    ad_id = int(parts[2])
+    new_price = int(parts[3])
+
+    all_agahi = load_agahi()
+    ad = None
+    for uid, ads in all_agahi.items():
+        for a in ads:
+            if a['id'] == ad_id:
+                ad = a
+                break
+        if ad:
+            break
+    if not ad:
+        await query.message.edit_text("❌ آگهی یافت نشد!")
+        return
+
+    # افزایش قیمت پایه؛ تخفیف‌های فعال قبلی غیرفعال می‌شوند تا قیمت جدید ملاک باشد
+    ad['price'] = new_price
+    if ad.get('discount_history'):
+        for disc in ad['discount_history']:
+            disc['is_active'] = False
+    save_agahi(all_agahi)
+
+    # فقط قیمت پست چنل عوض می‌شود، بدون هیچ پیام/اعلان
+    try:
+        await _update_ad_channel_posts(context, ad)
+    except Exception as e:
+        logger.error(f"آپدیت پست چنل بعد از افزایش قیمت ناموفق: {e}")
+
+    await query.message.edit_text(f"✅ افزایش قیمت آگهی {ad_id} تایید شد. قیمت جدید: {new_price:,} تومان (بدون اعلان در چنل).")
+    try:
+        await context.bot.send_message(chat_id=ad['user_id'], text=f"✅ درخواست افزایش قیمت آگهی {ad_id} تایید شد.\n💵 قیمت جدید: {new_price:,} تومان\n{SIGNATURE}")
+    except Exception:
+        pass
+
+
+async def reject_price_up(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    ad_id = int(query.data.split("_")[2])
+    await query.message.edit_text(f"❌ درخواست افزایش قیمت برای آگهی {ad_id} رد شد.")
+    all_agahi = load_agahi()
+    for uid, ads in all_agahi.items():
+        for a in ads:
+            if a['id'] == ad_id:
+                try:
+                    await context.bot.send_message(chat_id=a['user_id'], text=f"❌ درخواست افزایش قیمت شما برای آگهی {ad_id} رد شد.")
+                except Exception:
+                    pass
+                return
 
 
 async def search_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

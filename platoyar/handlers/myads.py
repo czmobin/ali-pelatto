@@ -34,7 +34,7 @@ async def my_ads_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("📋 مشاهده همه آگهی های من", callback_data="view_my_ads", style="primary")],
         [InlineKeyboardButton("❌ انصراف از آگهی", callback_data="cancel_my_ad", style="danger")],
-        [InlineKeyboardButton("🎁 درخواست تخفیف", callback_data="request_discount_on_ad", style="success")],
+        [InlineKeyboardButton("💱 تغییر قیمت اکانت", callback_data="request_discount_on_ad", style="success")],
         [InlineKeyboardButton("🔙 بازگشت", callback_data="agahi_menu", style="primary")]
     ]
     await query.message.edit_text(f"📋 <b>مدیریت آگهی های من</b>\n\n{help_text}\n{SIGNATURE}", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
@@ -314,7 +314,7 @@ async def request_discount_on_ad(update: Update, context: ContextTypes.DEFAULT_T
     active_ads = [a for a in user_agahi if is_ad_active(a)]
     
     if not active_ads:
-        await query.message.edit_text("❌ شما هیچ آگهی فعالی برای درخواست تخفیف ندارید!\n(فقط آگهی های سبز قابلیت درخواست تخفیف دارند)", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="my_ads_menu", style="primary")]]))
+        await query.message.edit_text("❌ شما هیچ آگهی فعالی برای تغییر قیمت ندارید!\n(فقط آگهی های سبز قابلیت تغییر قیمت دارند)", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="my_ads_menu", style="primary")]]))
         return
     
     keyboard = []
@@ -329,11 +329,11 @@ async def request_discount_on_ad(update: Update, context: ContextTypes.DEFAULT_T
         if current_price is None:
             current_price = 0
         
-        keyboard.append([InlineKeyboardButton(f"🎁 درخواست تخفیف برای آگهی {ad['id']} (💰 {current_price:,} تومان)", callback_data=f"request_discount_{ad['id']}", style="success")])
-    
+        keyboard.append([InlineKeyboardButton(f"💱 آگهی {ad['id']} (💰 {current_price:,} تومان)", callback_data=f"request_discount_{ad['id']}", style="success")])
+
     keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="my_ads_menu", style="primary")])
-    
-    await query.message.edit_text("🎁 لطفاً آگهی مورد نظر برای درخواست تخفیف را انتخاب کنید:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+    await query.message.edit_text("💱 آگهی مورد نظر برای <b>تغییر قیمت</b> را انتخاب کنید:", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def request_discount_for_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -356,9 +356,63 @@ async def request_discount_for_ad(update: Update, context: ContextTypes.DEFAULT_
         await query.message.edit_text("❌ آگهی یافت نشد!")
         return
 
-    # قفل تخفیف: تا N روز پس از انتشار، امکان درخواست تخفیف نیست
+    current_price = ad.get('price')
+    discount_count = 0
+    if ad.get('discount_history'):
+        discount_count = len([d for d in ad['discount_history'] if d.get('is_active', True)])
+        for disc in reversed(ad['discount_history']):
+            if disc.get('is_active', True):
+                current_price = disc['new_price']
+                break
+
+    if current_price is None:
+        current_price = 0
+
+    context.user_data['discount_ad_id'] = ad_id
+    context.user_data['discount_current_price'] = current_price
+    context.user_data['discount_count'] = discount_count
+
+    keyboard = [
+        [InlineKeyboardButton("📈 افزایش قیمت آگهی", callback_data=f"pricechg_up_{ad_id}", style="primary")],
+        [InlineKeyboardButton("📉 کاهش قیمت آگهی (تخفیف)", callback_data=f"pricechg_down_{ad_id}", style="success")],
+        [InlineKeyboardButton("🔙 انصراف", callback_data="request_discount_on_ad", style="danger")]
+    ]
+    await query.message.edit_text(
+        f"💱 <b>تغییر قیمت اکانت</b>\n\n🆔 آگهی: {ad_id}\n💰 قیمت فعلی: <b>{current_price:,}</b> تومان\n\n"
+        "می‌خواهی قیمت را افزایش بدهی یا کاهش؟",
+        parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def pricechg_up_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    ad_id = int(query.data.split("_")[2])
+    current_price = context.user_data.get('discount_current_price', 0)
+    context.user_data['discount_ad_id'] = ad_id
+    context.user_data['pricechg_direction'] = 'up'
+    context.user_data['waiting_pricechg_value'] = True
+    await query.message.edit_text(
+        f"📈 <b>افزایش قیمت آگهی {ad_id}</b>\n💰 قیمت فعلی: {current_price:,} تومان\n\n"
+        "مبلغی که می‌خواهی به قیمت <b>اضافه</b> شود را به تومان بفرست (فقط عدد):",
+        parse_mode="HTML")
+
+
+async def pricechg_down_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    ad_id = int(query.data.split("_")[2])
+    # قفل تخفیف فقط برای کاهش قیمت: تا N روز پس از انتشار
+    all_agahi = load_agahi()
+    ad = None
+    for uid, ads in all_agahi.items():
+        for a in ads:
+            if a['id'] == ad_id:
+                ad = a
+                break
+        if ad:
+            break
     lock_days = get_setting('discount_lock_days', 4)
-    pd = ad.get('publish_date')
+    pd = ad.get('publish_date') if ad else None
     if lock_days and pd:
         try:
             unlock = datetime.strptime(pd, "%Y-%m-%d %H:%M:%S") + timedelta(days=int(lock_days))
@@ -368,40 +422,100 @@ async def request_discount_for_ad(update: Update, context: ContextTypes.DEFAULT_
                 d, h = rem.days, rem.seconds // 3600
                 await query.message.edit_text(
                     f"⏳ <b>هنوز نمی‌توانید برای این آگهی تخفیف بگذارید.</b>\n\n"
-                    f"آگهی‌ها تا <b>{int(lock_days)} روز</b> پس از انتشار قابل تخفیف نیستند.\n"
-                    f"⌛ زمان باقی‌مانده: حدود <b>{d} روز و {h} ساعت</b>.\n{SIGNATURE}",
+                    f"آگهی‌ها تا <b>{int(lock_days)} روز</b> پس از انتشار قابل کاهش قیمت (تخفیف) نیستند.\n"
+                    f"⌛ زمان باقی‌مانده: حدود <b>{d} روز و {h} ساعت</b>.",
                     parse_mode="HTML",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت", callback_data="request_discount_on_ad", style="primary")]]))
                 return
         except Exception:
             pass
-
-    current_price = ad.get('price')
-    discount_count = 0
-    if ad.get('discount_history'):
-        discount_count = len([d for d in ad['discount_history'] if d.get('is_active', True)])
-        for disc in reversed(ad['discount_history']):
-            if disc.get('is_active', True):
-                current_price = disc['new_price']
-                break
-    
-    if current_price is None:
-        current_price = 0
-    
+    current_price = context.user_data.get('discount_current_price', 0)
     context.user_data['discount_ad_id'] = ad_id
-    context.user_data['discount_current_price'] = current_price
-    context.user_data['discount_count'] = discount_count
-    
-    warning_text = ""
-    if discount_count > 0:
-        warning_text = f"\n\n⚠️ توجه: این آگهی قبلاً {discount_count} بار تخفیف خورده است.\nتخفیف جدید از قیمت فعلی ({current_price:,} تومان) اعمال می شود."
-    
-    keyboard = [
-        [InlineKeyboardButton("💰 مبلغ تخفیف", callback_data="discount_method_amount", style="primary")],
-        [InlineKeyboardButton("📊 درصد تخفیف", callback_data="discount_method_percent", style="primary")],
-        [InlineKeyboardButton("🔙 انصراف", callback_data="request_discount_on_ad", style="danger")]
-    ]
-    await query.message.edit_text(f"🎁 روش تخفیف مورد نظر را انتخاب کنید:{warning_text}", reply_markup=InlineKeyboardMarkup(keyboard))
+    context.user_data['pricechg_direction'] = 'down'
+    context.user_data['waiting_pricechg_value'] = True
+    await query.message.edit_text(
+        f"📉 <b>کاهش قیمت آگهی {ad_id} (تخفیف)</b>\n💰 قیمت فعلی: {current_price:,} تومان\n\n"
+        "مبلغ <b>تخفیف/کاهش</b> را به تومان بفرست (فقط عدد):",
+        parse_mode="HTML")
+
+
+async def process_pricechg_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.user_data.get('waiting_pricechg_value'):
+        return
+    raw = (update.message.text or "").replace(",", "").replace("،", "").strip()
+    if not raw.isdigit():
+        await update.message.reply_text("❌ مقدار نامعتبر! فقط عدد بفرست.")
+        return
+    value = int(raw)
+    ad_id = context.user_data.get('discount_ad_id')
+    direction = context.user_data.get('pricechg_direction', 'down')
+    current_price = context.user_data.get('discount_current_price', 0)
+    if current_price <= 0:
+        await update.message.reply_text("❌ خطا در دریافت قیمت فعلی!")
+        context.user_data['waiting_pricechg_value'] = False
+        return
+    if value <= 0:
+        await update.message.reply_text("❌ مقدار باید بزرگتر از صفر باشد.")
+        return
+
+    if direction == 'up':
+        new_price = current_price + value
+        dir_label = "افزایش"
+    else:
+        if value >= current_price:
+            await update.message.reply_text(f"❌ مبلغ کاهش نمی‌تواند برابر یا بیشتر از قیمت فعلی ({current_price:,} تومان) باشد!")
+            return
+        new_price = current_price - value
+        dir_label = "کاهش (تخفیف)"
+
+    all_agahi = load_agahi()
+    ad = None
+    for uid, ads in all_agahi.items():
+        for a in ads:
+            if a['id'] == ad_id:
+                ad = a
+                break
+        if ad:
+            break
+    if not ad:
+        await update.message.reply_text("❌ آگهی یافت نشد!")
+        context.user_data['waiting_pricechg_value'] = False
+        return
+
+    profile = load_profiles().get(str(update.effective_user.id), {})
+    _u = update.effective_user
+    admin_text = f"""🔔 درخواست {dir_label} قیمت از کاربر
+
+🆔 آگهی: {ad_id}
+👤 کاربر: {user_mention(_u.id, _u.first_name)}
+🆔 آیدی عددی: <code>{_u.id}</code>
+🆔 یوزرنیم: @{escape_html(_u.username) if _u.username else 'ندارد'}
+📞 شماره تماس: {escape_html(profile.get('phone', '-'))}
+
+💰 قیمت فعلی: {current_price:,} تومان
+{'➕' if direction == 'up' else '➖'} مبلغ {dir_label}: {value:,} تومان
+💵 قیمت جدید: {new_price:,} تومان
+
+لطفاً تایید یا رد کنید:"""
+
+    if direction == 'up':
+        keyboard = [
+            [InlineKeyboardButton("✅ تایید افزایش", callback_data=f"approve_priceup_{ad_id}_{new_price}", style="success")],
+            [InlineKeyboardButton("❌ رد", callback_data=f"reject_priceup_{ad_id}", style="danger")],
+        ]
+    else:
+        discount = value
+        keyboard = [
+            [InlineKeyboardButton("✅ تایید تخفیف", callback_data=f"approve_discount_{ad_id}_{new_price}_{discount}", style="success")],
+            [InlineKeyboardButton("❌ رد تخفیف", callback_data=f"reject_discount_{ad_id}", style="danger")],
+        ]
+
+    await send_to_target(context, GROUP_ADS, text=admin_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    await update.message.reply_text(f"✅ درخواست {dir_label} قیمت برای آگهی {ad_id} به ادمین ارسال شد.\nپس از تایید، اعمال می‌شود.")
+
+    context.user_data['waiting_pricechg_value'] = False
+    context.user_data['discount_ad_id'] = None
+    context.user_data['pricechg_direction'] = None
 
 
 async def discount_method_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
